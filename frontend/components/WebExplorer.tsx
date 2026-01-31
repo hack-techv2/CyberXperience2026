@@ -316,7 +316,7 @@ export default function WebExplorer({ onFlagFound }: WebExplorerProps) {
       <div className="bg-gray-900 border border-gray-800 rounded p-3 mb-2 flex-shrink-0">
         <h2 className="text-terminal-cyan font-bold text-sm mb-1">Stage 1: Information Disclosure</h2>
         <p className="text-xs text-gray-400 mb-1">
-          You have shell access to a document server. The server has a file retrieval system
+          You have restricted shell access to a document server. The server has a file retrieval system
           that allows reading files from the public directory. Can you find a way to read files
           outside of the intended directory?
         </p>

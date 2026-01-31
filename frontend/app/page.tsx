@@ -1,21 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Banner from '@/components/Banner';
 import TabSelector from '@/components/TabSelector';
 import WebExplorer from '@/components/WebExplorer';
 import ShellTerminal from '@/components/ShellTerminal';
 import FlagTracker from '@/components/FlagTracker';
+import { useFlagJWT } from '@/hooks/useFlagJWT';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'web' | 'terminal'>('web');
-  const [flags, setFlags] = useState<string[]>([]);
+  const { flags, addFlag, refreshFromCookie, isInitialized } = useFlagJWT();
 
-  const addFlag = (flag: string) => {
-    if (!flags.includes(flag)) {
-      setFlags([...flags, flag]);
-    }
-  };
+  // Poll cookie every 2 seconds to detect manual JWT modifications
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshFromCookie();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [refreshFromCookie]);
+
+  // Show loading state while JWT initializes
+  if (!isInitialized) {
+    return (
+      <main className="h-screen flex items-center justify-center bg-gray-950">
+        <div className="text-terminal-cyan animate-pulse">Initializing...</div>
+      </main>
+    );
+  }
 
   return (
     <main className="h-screen flex flex-col overflow-hidden">

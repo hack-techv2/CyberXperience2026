@@ -123,3 +123,23 @@ input[type="password"]:focus {
   @apply bg-transparent border-none outline-none m-0;
   padding: 0 0 0 4px;
 }
+
+/* Easter egg popup animation - bounce 3 times then stop */
+@keyframes bounce-thrice {
+  0%, 20%, 40%, 60%, 80%, 100% {
+    transform: translateY(0);
+  }
+  10% {
+    transform: translateY(-25px);
+  }
+  30% {
+    transform: translateY(-20px);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
+}
+
+.animate-bounce-thrice {
+  animation: bounce-thrice 1.5s ease-in-out;
+}
