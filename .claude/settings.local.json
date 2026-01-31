@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(dir:*)",
+      "WebSearch",
+      "Bash(npm run build:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker-compose exec frontend wget -qO- http://web-traversal:5000/api/files)",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker logs:*)",
+      "Bash(curl:*)"
+    ]
+  },
+  "enabledPlugins": {
+    "greptile@claude-plugins-official": true
+  }
+}

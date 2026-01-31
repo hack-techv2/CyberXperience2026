@@ -1,0 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --terminal-bg: #0d1117;
+  --terminal-fg: #c9d1d9;
+  --terminal-green: #3fb950;
+  --terminal-yellow: #d29922;
+  --terminal-red: #f85149;
+  --terminal-blue: #58a6ff;
+  --terminal-purple: #bc8cff;
+  --terminal-cyan: #39c5cf;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: var(--terminal-bg);
+  color: var(--terminal-fg);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+#__next {
+  height: 100%;
+}
+
+/* Terminal styling - xterm.js container */
+.xterm-container .xterm {
+  padding: 12px;
+  height: 100%;
+}
+
+.xterm-container .xterm-viewport {
+  overflow-y: auto !important;
+}
+
+/* Terminal selection styling */
+.xterm-container .xterm .xterm-selection div {
+  background-color: #264f78 !important;
+}
+
+/* Terminal cursor */
+.xterm-container .xterm-cursor-layer {
+  z-index: 1;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #161b22;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+/* Custom button styles */
+.btn-primary {
+  @apply px-4 py-2 bg-terminal-blue text-terminal-bg font-semibold rounded transition-colors;
+}
+
+.btn-primary:hover {
+  @apply bg-blue-400;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 bg-gray-700 text-terminal-fg font-semibold rounded transition-colors;
+}
+
+.btn-secondary:hover {
+  @apply bg-gray-600;
+}
+
+/* Tab styling */
+.tab {
+  @apply px-4 py-2 cursor-pointer transition-colors border-b-2 border-transparent;
+}
+
+.tab:hover {
+  @apply bg-gray-800;
+}
+
+.tab.active {
+  @apply border-terminal-blue text-terminal-blue;
+}
+
+/* ASCII banner - subtle professional styling (no animated glow) */
+.ascii-banner {
+  text-shadow: 0 0 2px var(--terminal-cyan);
+}
+
+/* Input styling */
+input[type="text"]:not(.terminal-input),
+input[type="password"] {
+  @apply bg-gray-800 border border-gray-700 rounded px-3 py-2 text-terminal-fg font-mono;
+}
+
+input[type="text"]:not(.terminal-input):focus,
+input[type="password"]:focus {
+  @apply outline-none border-terminal-blue;
+}
+
+/* Terminal inputs should be invisible/seamless */
+.terminal-input {
+  @apply bg-transparent border-none outline-none m-0;
+  padding: 0 0 0 4px;
+}

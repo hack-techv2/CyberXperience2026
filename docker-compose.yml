@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Frontend - Next.js Web Interface
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_GATEWAY_URL=http://localhost:4000
+    depends_on:
+      - gateway
+      - web-traversal
+    networks:
+      - ctf-network
+
+  # Gateway - Terminal Bridge (Node.js + Socket.io)
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - FRONTEND_URL=http://localhost:3000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - shell-backend
+    networks:
+      - ctf-network
+
+  # Stage 1 - Web Traversal Service (Flask)
+  web-traversal:
+    build:
+      context: ./services/web-traversal
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    networks:
+      - ctf-network
+
+  # Stage 2 & 3 - Shell Backend Service (Ubuntu + Restricted Shell)
+  shell-backend:
+    build:
+      context: ./services/shell-backend
+      dockerfile: Dockerfile
+    container_name: shell-backend
+    networks:
+      - ctf-network
+    # Keep container running
+    tty: true
+    stdin_open: true
+
+networks:
+  ctf-network:
+    driver: bridge
