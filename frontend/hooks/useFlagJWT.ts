@@ -36,8 +36,10 @@ export function useFlagJWT(): UseFlagJWTResult {
   const [isInitialized, setIsInitialized] = useState(false);
   const validatingRef = useRef<Set<string>>(new Set());
   const storingCredsRef = useRef(false);
+  const initStartedRef = useRef(false); // Prevents duplicate initSession in StrictMode
 
   // Read state from the cookie and update state
+  // Uses defensive updates - never decrements flag count or removes solved stages
   const refreshFromCookie = useCallback(() => {
     const token = Cookies.get(COOKIE_NAME);
     if (token) {
@@ -48,15 +50,28 @@ export function useFlagJWT(): UseFlagJWTResult {
           ? decoded.payload.solved_stages
           : [];
         const creds = decoded.payload.found_creds || null;
-        setSolvedStages(stages);
-        setFlagsCount(count);
-        setFoundCreds(creds);
+
+        // Defensive: only increment, never decrement
+        setFlagsCount(prev => Math.max(prev, count));
+        setSolvedStages(prev => {
+          // Merge stages, never remove
+          const combined = new Set([...prev, ...stages]);
+          return combined.size > prev.length ? Array.from(combined) : prev;
+        });
+        // Credentials can be set if we don't have them
+        setFoundCreds(prev => prev || creds);
       }
     }
   }, []);
 
   // Initialize JWT from server on mount
   useEffect(() => {
+    // Prevent duplicate initialization in React StrictMode
+    if (initStartedRef.current) {
+      return;
+    }
+    initStartedRef.current = true;
+
     const initSession = async () => {
       const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
       const existingToken = Cookies.get(COOKIE_NAME);

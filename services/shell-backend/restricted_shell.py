@@ -10,6 +10,7 @@ command injection via pipe (|) and other shell metacharacters.
 import subprocess
 import sys
 import os
+import readline  # Enables arrow key history support
 
 # Ensure unbuffered output for PTY
 sys.stdout.reconfigure(line_buffering=True)
@@ -107,18 +108,13 @@ def main():
 
     while True:
         try:
-            # Get user input
-            sys.stdout.write("rshell> ")
-            sys.stdout.flush()
-            cmd_input = sys.stdin.readline()
-
-            if not cmd_input:  # EOF
-                print("\nGoodbye!", flush=True)
-                break
-
-            cmd_input = cmd_input.strip()
+            # Get user input - using input() for readline history support
+            cmd_input = input("rshell> ")
             execute_command(cmd_input)
 
+        except EOFError:  # Ctrl+D
+            print("\nGoodbye!", flush=True)
+            break
         except KeyboardInterrupt:
             print("\nUse 'exit' to quit.", flush=True)
         except Exception as e:

@@ -11,7 +11,8 @@
       "Bash(docker-compose up:*)",
       "Bash(docker logs:*)",
       "Bash(curl:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(grep:*)"
     ]
   },
   "enabledPlugins": {
