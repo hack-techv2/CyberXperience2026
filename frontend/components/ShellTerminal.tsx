@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import dynamic from 'next/dynamic';
+import type { FoundCreds } from '@/hooks/useFlagJWT';
 
 // Dynamic import to prevent SSR issues with xterm.js (requires DOM)
 const XTermComponent = dynamic(() => import('./XTermComponent'), {
@@ -13,11 +14,6 @@ const XTermComponent = dynamic(() => import('./XTermComponent'), {
     </div>
   ),
 });
-
-interface FoundCreds {
-  username: string;
-  password: string;
-}
 
 interface ShellTerminalProps {
   onFlagCandidate: (flag: string) => void;

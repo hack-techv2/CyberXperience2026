@@ -15,9 +15,9 @@ export default function TabSelector({ activeTab, onTabChange }: TabSelectorProps
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
         </svg>
-        <span>Stage 1: Web Explorer</span>
+        <span>Stage 1: Shell Breakout</span>
         <span className="text-xs px-2 py-0.5 bg-terminal-cyan/20 text-terminal-cyan rounded">
-          Path Traversal
+          Breakout
         </span>
       </button>
 

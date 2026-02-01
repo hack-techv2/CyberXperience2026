@@ -7,17 +7,8 @@
  * JWT issuance is now server-side. This file only contains decoding utilities.
  */
 
-// JWT-safe base64 encoding (URL-safe, no padding)
-export function base64UrlEncode(str: string): string {
-  const base64 = btoa(str);
-  return base64
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
-
-// JWT-safe base64 decoding
-export function base64UrlDecode(str: string): string {
+// JWT-safe base64 decoding (internal use only)
+function base64UrlDecode(str: string): string {
   // Add back padding if needed
   let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
   const padding = base64.length % 4;
@@ -27,20 +18,15 @@ export function base64UrlDecode(str: string): string {
   return atob(base64);
 }
 
-export interface FoundCreds {
-  username: string;
-  password: string;
-}
-
-export interface JWTPayload {
+interface JWTPayload {
   flags_solved: number;
   solved_stages?: string[];
-  found_creds?: FoundCreds | null;
+  found_creds?: { username: string; password: string } | null;
   iat: number;
   sub: string;
 }
 
-export interface DecodedJWT {
+interface DecodedJWT {
   header: { alg: string; typ: string };
   payload: JWTPayload;
 }

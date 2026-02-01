@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 :root {
+  /* Dark theme (default) */
   --terminal-bg: #0d1117;
   --terminal-fg: #c9d1d9;
   --terminal-green: #3fb950;
@@ -13,6 +14,30 @@
   --terminal-blue: #58a6ff;
   --terminal-purple: #bc8cff;
   --terminal-cyan: #39c5cf;
+  --gray-500: #6e7681;
+  --gray-600: #484f58;
+  --gray-700: #30363d;
+  --gray-800: #21262d;
+  --gray-900: #161b22;
+  --gray-950: #0d1117;
+}
+
+:root.light {
+  /* Light theme */
+  --terminal-bg: #ffffff;
+  --terminal-fg: #24292f;
+  --terminal-green: #1a7f37;
+  --terminal-yellow: #9a6700;
+  --terminal-red: #cf222e;
+  --terminal-blue: #0969da;
+  --terminal-purple: #8250df;
+  --terminal-cyan: #1b7c83;
+  --gray-500: #6e7781;
+  --gray-600: #57606a;
+  --gray-700: #8c959f;
+  --gray-800: #d0d7de;
+  --gray-900: #eaeef2;
+  --gray-950: #f6f8fa;
 }
 
 * {
@@ -60,16 +85,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #161b22;
+  background: var(--gray-900);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #30363d;
+  background: var(--gray-700);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: var(--gray-600);
 }
 
 /* Custom button styles */

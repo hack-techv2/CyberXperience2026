@@ -14,10 +14,57 @@ interface HistoryEntry {
 }
 
 // Simulated file system structure (what users think exists)
+// IoT device restricted shell - user starts in /mnt/shell
 const VIRTUAL_FILES: Record<string, string[]> = {
-  '/': ['public'],
-  '/public': ['readme.txt', 'contact.txt', 'terms.txt'],
+  '/': ['mnt', 'data'],
+  '/mnt': ['shell'],
+  '/mnt/shell': ['readme.txt', 'contact.txt', 'terms.txt'],
+  '/data': [], // Empty - appears to exist but is "empty"
 };
+
+// Helper function to normalize a path (resolve . and .. segments)
+function normalizePath(path: string): string {
+  // Handle empty path
+  if (!path) return '/';
+
+  // Ensure path starts with /
+  const absolutePath = path.startsWith('/') ? path : '/' + path;
+
+  const segments = absolutePath.split('/').filter(s => s !== '' && s !== '.');
+  const result: string[] = [];
+
+  for (const segment of segments) {
+    if (segment === '..') {
+      // Go up one directory (but don't go above root)
+      if (result.length > 0) {
+        result.pop();
+      }
+    } else {
+      result.push(segment);
+    }
+  }
+
+  return '/' + result.join('/');
+}
+
+// Helper function to build a display path (keeps .. segments for pwd display)
+function buildDisplayPath(currentPath: string, targetPath: string): string {
+  // Strip leading slash if present - /data becomes data (relative)
+  const relativePath = targetPath.startsWith('/') ? targetPath.slice(1) : targetPath;
+
+  // Combine with current path (keep .. for display)
+  if (relativePath === '') {
+    return currentPath;
+  }
+  return currentPath + '/' + relativePath;
+}
+
+// Helper function to resolve a path to check if it exists
+// Note: This shell does NOT support absolute paths - all paths are relative
+function resolvePath(currentPath: string, targetPath: string): string {
+  const displayPath = buildDisplayPath(currentPath, targetPath);
+  return normalizePath(displayPath);
+}
 
 // Help text for available commands
 const HELP_TEXT = `Available commands:
@@ -28,9 +75,7 @@ const HELP_TEXT = `Available commands:
   cd <path>         Change directory
   clear             Clear the terminal
   whoami            Display current user
-  id                Display user identity
-
-Hint: The server's file API might not properly validate paths...`;
+  id                Display user identity`;
 
 const BANNER = `
 ╔═══════════════════════════════════════════════════════════════╗
@@ -45,7 +90,7 @@ const BANNER = `
 export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: WebExplorerProps) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [currentInput, setCurrentInput] = useState('');
-  const [currentPath, setCurrentPath] = useState('/public');
+  const [currentPath, setCurrentPath] = useState('/mnt/shell');
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -137,55 +182,55 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
         return { output: 'uid=1000(guest) gid=1000(guest) groups=1000(guest)' };
 
       case 'ls': {
-        const targetPath = args[0] || currentPath;
+        const targetArg = args[0] || '.';
 
-        // Check if it's a path traversal attempt
-        if (targetPath.includes('..')) {
-          return { output: `ls: cannot access '${targetPath}': Permission denied`, isError: true };
+        // Build and resolve the path
+        const displayPath = buildDisplayPath(currentPath, targetArg);
+        const resolvedPath = normalizePath(displayPath);
+
+        // Block traversal to /data/secrets specifically
+        if (resolvedPath.startsWith('/data/secrets')) {
+          return { output: `ls: cannot access '${targetArg}': Permission denied`, isError: true };
         }
 
-        // List from API for /public
-        if (targetPath === '/public' || targetPath === '.' || targetPath === '') {
+        // List from API for /mnt/shell (the user's home with actual files)
+        if (resolvedPath === '/mnt/shell') {
           const result = await listFiles();
           return result;
         }
 
         // Check virtual filesystem
-        const files = VIRTUAL_FILES[targetPath];
-        if (files) {
+        const files = VIRTUAL_FILES[resolvedPath];
+        if (files !== undefined) {
+          if (files.length === 0) {
+            return { output: '' }; // Empty directory
+          }
           return { output: files.join('  ') };
         }
 
-        return { output: `ls: cannot access '${targetPath}': No such file or directory`, isError: true };
+        return { output: `ls: cannot access '${targetArg}': No such file or directory`, isError: true };
       }
 
       case 'cd': {
         const targetPath = args[0];
-        if (!targetPath || targetPath === '~' || targetPath === '/public') {
-          setCurrentPath('/public');
+        if (!targetPath || targetPath === '~') {
+          setCurrentPath('/mnt/shell');
           return { output: '' };
         }
 
-        if (targetPath === '..') {
-          if (currentPath === '/public') {
-            setCurrentPath('/');
-            return { output: '' };
-          }
-          return { output: '' };
-        }
+        // Build display path (keeps .. for pwd display) and resolved path (for checking)
+        const displayPath = buildDisplayPath(currentPath, targetPath);
+        const resolvedPath = normalizePath(displayPath);
 
-        if (targetPath === '/') {
-          setCurrentPath('/');
-          return { output: '' };
-        }
-
-        // Block obvious traversal in cd (they need to use cat for the exploit)
-        if (targetPath.includes('..') && targetPath.includes('data')) {
+        // Block traversal to /data/secrets specifically (they need to use cat for the exploit)
+        if (resolvedPath.startsWith('/data/secrets')) {
           return { output: `cd: ${targetPath}: Permission denied`, isError: true };
         }
 
-        if (VIRTUAL_FILES[targetPath]) {
-          setCurrentPath(targetPath);
+        // Check if the resolved path exists in our virtual filesystem
+        if (VIRTUAL_FILES[resolvedPath] !== undefined) {
+          // Store the display path (with ..) not the resolved path
+          setCurrentPath(displayPath);
           return { output: '' };
         }
 
@@ -221,7 +266,7 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
         return { output: 'docserver' };
 
       case 'env':
-        return { output: 'PATH=/usr/local/bin:/usr/bin:/bin\nHOME=/home/guest\nUSER=guest\nSHELL=/bin/rbash' };
+        return { output: 'PATH=/usr/local/bin:/usr/bin:/bin\nHOME=/mnt/shell\nUSER=guest\nSHELL=/bin/rbash\nPWD=' + currentPath };
 
       case 'history':
         return { output: commandHistory.map((c, i) => `  ${i + 1}  ${c}`).join('\n') };
@@ -321,7 +366,9 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
 
   // Get prompt string
   const getPrompt = () => {
-    const path = currentPath === '/public' ? '~' : currentPath;
+    // Check resolved path to determine if we're in home directory
+    const resolvedPath = normalizePath(currentPath);
+    const path = resolvedPath === '/mnt/shell' ? '~' : currentPath;
     return `guest@docserver:${path}$ `;
   };
 
@@ -329,11 +376,11 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
     <div className="h-full flex flex-col p-3 overflow-hidden">
       {/* Challenge Info */}
       <div className="bg-gray-900 border border-gray-800 rounded p-3 mb-2 flex-shrink-0">
-        <h2 className="text-terminal-cyan font-bold text-sm mb-1">Stage 1: Information Disclosure</h2>
+        <h2 className="text-terminal-cyan font-bold text-sm mb-1">Stage 1: Restricted Shell Breakout</h2>
         <p className="text-xs text-gray-400 mb-1">
-          You have restricted shell access to a document server. The server has a file retrieval system
-          that allows reading files from the public directory. Can you find a way to read files
-          outside of the intended directory?
+          You have shell access to an IoT device management interface. The device runs a
+          restricted shell that limits available commands. Can you find a way to access
+          files outside of the restricted environment?
         </p>
         <div className="text-xs text-gray-600">
           <strong>Objective:</strong> Find and read <code className="text-terminal-yellow">/data/secrets/credentials.txt</code>
@@ -349,7 +396,7 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
             <div className="w-2.5 h-2.5 rounded-full bg-terminal-yellow"></div>
             <div className="w-2.5 h-2.5 rounded-full bg-terminal-green"></div>
           </div>
-          <span className="text-xs text-gray-400 ml-4">guest@docserver — /bin/rbash</span>
+          <span className="text-xs text-gray-400 ml-4">guest@docserver — rbash</span>
         </div>
 
         {/* Terminal Body */}
@@ -401,7 +448,7 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
           <code className="text-terminal-cyan">cat &lt;file&gt;</code> to read files,{' '}
           <code className="text-terminal-cyan">help</code> for all commands.
           <span className="mx-2">|</span>
-          <strong>Navigation:</strong> ↑/↓ for command history, Tab for completion
+          <strong>Navigation:</strong> ↑/↓ for command history
         </p>
       </div>
     </div>

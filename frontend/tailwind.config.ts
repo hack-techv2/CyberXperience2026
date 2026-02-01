@@ -13,14 +13,22 @@ const config: Config = {
       },
       colors: {
         terminal: {
-          bg: '#0d1117',
-          fg: '#c9d1d9',
-          green: '#3fb950',
-          yellow: '#d29922',
-          red: '#f85149',
-          blue: '#58a6ff',
-          purple: '#bc8cff',
-          cyan: '#39c5cf',
+          bg: 'var(--terminal-bg)',
+          fg: 'var(--terminal-fg)',
+          green: 'var(--terminal-green)',
+          yellow: 'var(--terminal-yellow)',
+          red: 'var(--terminal-red)',
+          blue: 'var(--terminal-blue)',
+          purple: 'var(--terminal-purple)',
+          cyan: 'var(--terminal-cyan)',
+        },
+        gray: {
+          500: 'var(--gray-500)',
+          600: 'var(--gray-600)',
+          700: 'var(--gray-700)',
+          800: 'var(--gray-800)',
+          900: 'var(--gray-900)',
+          950: 'var(--gray-950)',
         }
       }
     },
