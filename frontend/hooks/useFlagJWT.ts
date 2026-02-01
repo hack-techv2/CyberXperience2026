@@ -2,155 +2,260 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Cookies from 'js-cookie';
-import { createInitialJWT, decodeJWT, addFlagToJWT } from '@/lib/jwt';
+import { decodeJWT } from '@/lib/jwt';
 
 const COOKIE_NAME = 'ctf_session';
 
-// Placeholder flags with the patterns FlagTracker looks for
-const PLACEHOLDER_FLAGS = [
-  'FLAG{p4th_tr4v3rs4l_placeholder}',
-  'FLAG{c0mm4nd_1nj3ct10n_placeholder}',
-  'FLAG{gtf0_f1nd_placeholder}',
-];
+export interface FoundCreds {
+  username: string;
+  password: string;
+}
 
 export interface UseFlagJWTResult {
-  flags: string[];
-  addFlag: (flag: string) => void;
+  solvedStages: string[];
+  flagsCount: number;
+  foundCreds: FoundCreds | null;
+  validateFlag: (potentialFlag: string) => Promise<boolean>;
+  storeCredentials: (username: string, password: string) => Promise<boolean>;
   refreshFromCookie: () => void;
   isInitialized: boolean;
 }
 
 /**
- * React hook for JWT-based flag persistence
+ * React hook for JWT-based flag persistence with server-side validation
  *
- * - Initializes JWT cookie on first visit
- * - Provides addFlag to capture flags
+ * - Requests JWT from server on first visit (server issues the token)
+ * - Provides validateFlag to send candidates to server for validation
+ * - Provides storeCredentials to save found credentials to JWT
  * - Provides refreshFromCookie to detect manual JWT modifications
  */
 export function useFlagJWT(): UseFlagJWTResult {
-  const [flags, setFlags] = useState<string[]>([]);
+  const [solvedStages, setSolvedStages] = useState<string[]>([]);
+  const [flagsCount, setFlagsCount] = useState(0);
+  const [foundCreds, setFoundCreds] = useState<FoundCreds | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  // Track flags added legitimately (not from JWT cheating)
-  const legitimateFlags = useRef<string[]>([]);
+  const validatingRef = useRef<Set<string>>(new Set());
+  const storingCredsRef = useRef(false);
 
-  // Generate flags array based on JWT count (for cheating detection)
-  const generateFlagsFromCount = useCallback((count: number): string[] => {
-    // Combine legitimate flags with placeholders to reach the count
-    const result = [...legitimateFlags.current];
-    const neededPlaceholders = count - result.length;
-
-    if (neededPlaceholders > 0) {
-      // Add placeholder flags for stages not legitimately solved
-      for (let i = 0; i < neededPlaceholders && i < PLACEHOLDER_FLAGS.length; i++) {
-        // Find a placeholder that isn't already matched by legitimate flags
-        const placeholder = PLACEHOLDER_FLAGS[i];
-        const pattern = placeholder.match(/FLAG\{(\w+)_placeholder\}/)?.[1];
-        const alreadyHasPattern = result.some(f => pattern && f.includes(pattern));
-        if (!alreadyHasPattern) {
-          result.push(placeholder);
-        }
-      }
-    }
-
-    return result.slice(0, 3); // Max 3 flags
-  }, []);
-
-  // Read flags_solved from the cookie and update state
+  // Read state from the cookie and update state
   const refreshFromCookie = useCallback(() => {
     const token = Cookies.get(COOKIE_NAME);
     if (token) {
       const decoded = decodeJWT(token);
-      if (decoded && typeof decoded.payload.flags_solved === 'number') {
-        const count = Math.min(Math.max(0, decoded.payload.flags_solved), 3);
-        const newFlags = generateFlagsFromCount(count);
-        setFlags(newFlags);
+      if (decoded && decoded.payload) {
+        const count = Math.min(Math.max(0, decoded.payload.flags_solved || 0), 3);
+        const stages = Array.isArray(decoded.payload.solved_stages)
+          ? decoded.payload.solved_stages
+          : [];
+        const creds = decoded.payload.found_creds || null;
+        setSolvedStages(stages);
+        setFlagsCount(count);
+        setFoundCreds(creds);
       }
-    }
-  }, [generateFlagsFromCount]);
-
-  // Initialize JWT cookie on mount
-  useEffect(() => {
-    const existingToken = Cookies.get(COOKIE_NAME);
-
-    if (!existingToken) {
-      // First visit - create initial JWT
-      const newToken = createInitialJWT();
-      Cookies.set(COOKIE_NAME, newToken, {
-        expires: 7, // 7 days
-        sameSite: 'lax',
-      });
-      setFlags([]);
-    } else {
-      // Existing visit - read flags_solved from JWT
-      const decoded = decodeJWT(existingToken);
-      if (decoded && typeof decoded.payload.flags_solved === 'number') {
-        const count = Math.min(Math.max(0, decoded.payload.flags_solved), 3);
-        const restoredFlags = generateFlagsFromCount(count);
-        setFlags(restoredFlags);
-      } else {
-        setFlags([]);
-      }
-    }
-
-    setIsInitialized(true);
-  }, [generateFlagsFromCount]);
-
-  // Add a flag to the JWT (legitimate flag capture)
-  const addFlag = useCallback((flag: string) => {
-    // Check if this flag was already legitimately captured
-    if (legitimateFlags.current.includes(flag)) {
-      return; // Don't increment if already captured
-    }
-
-    // Check if we already have a flag with the same pattern
-    const patterns = ['p4th_tr4v3rs4l', 'c0mm4nd_1nj3ct10n', 'gtf0_f1nd'];
-    const flagPattern = patterns.find(p => flag.includes(p));
-    if (flagPattern && legitimateFlags.current.some(f => f.includes(flagPattern))) {
-      return; // Already have a flag for this stage
-    }
-
-    const token = Cookies.get(COOKIE_NAME);
-    if (!token) {
-      // No token exists, create one and increment
-      const newToken = createInitialJWT();
-      const updatedToken = addFlagToJWT(newToken);
-      if (updatedToken) {
-        Cookies.set(COOKIE_NAME, updatedToken, {
-          expires: 7,
-          sameSite: 'lax',
-        });
-        legitimateFlags.current = [flag];
-        setFlags([flag]);
-      }
-      return;
-    }
-
-    const updatedToken = addFlagToJWT(token);
-    if (updatedToken) {
-      Cookies.set(COOKIE_NAME, updatedToken, {
-        expires: 7,
-        sameSite: 'lax',
-      });
-
-      // Track as legitimate flag and update state
-      legitimateFlags.current = [...legitimateFlags.current, flag];
-      setFlags((prev) => {
-        // Remove any placeholder for this pattern and add the real flag
-        const filtered = prev.filter(f => {
-          if (!flagPattern) return true;
-          return !f.includes(flagPattern) || f === flag;
-        });
-        if (!filtered.includes(flag)) {
-          filtered.push(flag);
-        }
-        return filtered;
-      });
     }
   }, []);
 
+  // Initialize JWT from server on mount
+  useEffect(() => {
+    const initSession = async () => {
+      const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+      const existingToken = Cookies.get(COOKIE_NAME);
+
+      try {
+        const response = await fetch(`${gatewayUrl}/api/session/init`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            existingToken: existingToken || null,
+          }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+
+          // Store the token from server
+          Cookies.set(COOKIE_NAME, result.token, {
+            expires: 7, // 7 days
+            sameSite: 'lax',
+          });
+
+          // Update state from payload
+          const payload = result.payload;
+          const count = Math.min(Math.max(0, payload.flags_solved || 0), 3);
+          const stages = Array.isArray(payload.solved_stages)
+            ? payload.solved_stages
+            : [];
+          const creds = payload.found_creds || null;
+
+          setSolvedStages(stages);
+          setFlagsCount(count);
+          setFoundCreds(creds);
+        } else {
+          // Server error - fallback to reading existing cookie if available
+          if (existingToken) {
+            const decoded = decodeJWT(existingToken);
+            if (decoded && decoded.payload) {
+              const count = Math.min(Math.max(0, decoded.payload.flags_solved || 0), 3);
+              const stages = Array.isArray(decoded.payload.solved_stages)
+                ? decoded.payload.solved_stages
+                : [];
+              const creds = decoded.payload.found_creds || null;
+              setSolvedStages(stages);
+              setFlagsCount(count);
+              setFoundCreds(creds);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Session init error:', error);
+        // Fallback to reading existing cookie
+        if (existingToken) {
+          const decoded = decodeJWT(existingToken);
+          if (decoded && decoded.payload) {
+            const count = Math.min(Math.max(0, decoded.payload.flags_solved || 0), 3);
+            const stages = Array.isArray(decoded.payload.solved_stages)
+              ? decoded.payload.solved_stages
+              : [];
+            const creds = decoded.payload.found_creds || null;
+            setSolvedStages(stages);
+            setFlagsCount(count);
+            setFoundCreds(creds);
+          }
+        }
+      }
+
+      setIsInitialized(true);
+    };
+
+    initSession();
+  }, []);
+
+  // Validate a potential flag with the server
+  const validateFlag = useCallback(async (potentialFlag: string): Promise<boolean> => {
+    // Prevent duplicate validation requests for the same flag
+    if (validatingRef.current.has(potentialFlag)) {
+      return false;
+    }
+
+    validatingRef.current.add(potentialFlag);
+
+    try {
+      const sessionToken = Cookies.get(COOKIE_NAME);
+      const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+
+      const response = await fetch(`${gatewayUrl}/api/validate-flag`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          potentialFlag,
+          sessionToken,
+        }),
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const result = await response.json();
+
+      if (result.valid && result.newToken) {
+        // Update cookie with new token
+        Cookies.set(COOKIE_NAME, result.newToken, {
+          expires: 7,
+          sameSite: 'lax',
+        });
+
+        // Update state if this is a newly solved stage
+        if (!result.alreadySolved) {
+          setSolvedStages(prev => {
+            if (prev.includes(result.stageId)) return prev;
+            return [...prev, result.stageId];
+          });
+          setFlagsCount(result.flagsCount);
+        }
+
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Flag validation error:', error);
+      return false;
+    } finally {
+      validatingRef.current.delete(potentialFlag);
+    }
+  }, []);
+
+  // Store found credentials with the server
+  const storeCredentials = useCallback(async (username: string, password: string): Promise<boolean> => {
+    // Prevent duplicate store requests
+    if (storingCredsRef.current) {
+      return false;
+    }
+
+    // Already have credentials stored
+    if (foundCreds) {
+      return true;
+    }
+
+    storingCredsRef.current = true;
+
+    try {
+      const sessionToken = Cookies.get(COOKIE_NAME);
+      const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+
+      const response = await fetch(`${gatewayUrl}/api/session/store-creds`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionToken,
+          username,
+          password,
+        }),
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.newToken) {
+        // Update cookie with new token
+        Cookies.set(COOKIE_NAME, result.newToken, {
+          expires: 7,
+          sameSite: 'lax',
+        });
+
+        // Update state
+        if (!result.alreadyStored) {
+          setFoundCreds({ username, password });
+        }
+
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Store credentials error:', error);
+      return false;
+    } finally {
+      storingCredsRef.current = false;
+    }
+  }, [foundCreds]);
+
   return {
-    flags,
-    addFlag,
+    solvedStages,
+    flagsCount,
+    foundCreds,
+    validateFlag,
+    storeCredentials,
     refreshFromCookie,
     isInitialized,
   };

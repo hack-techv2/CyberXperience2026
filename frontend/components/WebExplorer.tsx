@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface WebExplorerProps {
-  onFlagFound: (flag: string) => void;
+  onFlagCandidate: (flag: string) => void;
+  onCredentialsFound: (username: string, password: string) => void;
 }
 
 interface HistoryEntry {
@@ -41,7 +42,7 @@ const BANNER = `
 ╚═══════════════════════════════════════════════════════════════╝
 `;
 
-export default function WebExplorer({ onFlagFound }: WebExplorerProps) {
+export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: WebExplorerProps) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [currentInput, setCurrentInput] = useState('');
   const [currentPath, setCurrentPath] = useState('/public');
@@ -52,13 +53,26 @@ export default function WebExplorer({ onFlagFound }: WebExplorerProps) {
 
   const apiBase = '/api/web';
 
-  // Check for flags in content
+  // Check for flags in content - sends candidates to server for validation
   const checkForFlags = useCallback((content: string) => {
     const flagMatch = content.match(/FLAG\{[^}]+\}/g);
     if (flagMatch) {
-      flagMatch.forEach(flag => onFlagFound(flag));
+      flagMatch.forEach(flag => onFlagCandidate(flag));
     }
-  }, [onFlagFound]);
+  }, [onFlagCandidate]);
+
+  // Check for credentials in content and auto-capture them
+  const checkForCredentials = useCallback((content: string) => {
+    // Look for username and password patterns in the credentials file
+    const usernameMatch = content.match(/Username:\s*(\S+)/i);
+    const passwordMatch = content.match(/Password:\s*(\S+)/i);
+
+    if (usernameMatch && passwordMatch) {
+      const username = usernameMatch[1];
+      const password = passwordMatch[1];
+      onCredentialsFound(username, password);
+    }
+  }, [onCredentialsFound]);
 
   // Fetch file from the vulnerable API
   const fetchFile = async (filename: string): Promise<{ output: string; isError: boolean }> => {
@@ -70,6 +84,7 @@ export default function WebExplorer({ onFlagFound }: WebExplorerProps) {
 
       if (data.status === 'success' && data.content) {
         checkForFlags(data.content);
+        checkForCredentials(data.content);
         return { output: data.content, isError: false };
       } else {
         return { output: data.message || 'File not found', isError: true };

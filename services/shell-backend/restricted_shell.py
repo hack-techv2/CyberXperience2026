@@ -11,6 +11,10 @@ import subprocess
 import sys
 import os
 
+# Ensure unbuffered output for PTY
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 # Allowed commands whitelist
 ALLOWED_COMMANDS = ['ls', 'pwd', 'whoami', 'id', 'help', 'date', 'echo', 'clear', 'exit']
 
@@ -63,20 +67,21 @@ def execute_command(cmd_input):
     base_cmd = get_base_command(cmd_input)
 
     if base_cmd.lower() == 'exit':
-        print("Goodbye!")
+        print("Goodbye!", flush=True)
         sys.exit(0)
 
     if base_cmd.lower() == 'help':
-        print(HELP_TEXT)
+        print(HELP_TEXT, flush=True)
         return
 
     if base_cmd.lower() == 'clear':
-        os.system('clear')
+        # Use ANSI escape codes instead of os.system for better PTY compatibility
+        print('\033[2J\033[H', end='', flush=True)
         return
 
     if not is_command_allowed(cmd_input):
-        print(f"Error: Command '{base_cmd}' is not permitted.")
-        print("Type 'help' to see available commands.")
+        print(f"Error: Command '{base_cmd}' is not permitted.", flush=True)
+        print("Type 'help' to see available commands.", flush=True)
         return
 
     try:
@@ -89,16 +94,16 @@ def execute_command(cmd_input):
             timeout=10
         )
         if result.stdout:
-            print(result.stdout, end='')
+            print(result.stdout, end='', flush=True)
         if result.stderr:
-            print(result.stderr, end='', file=sys.stderr)
+            print(result.stderr, end='', flush=True, file=sys.stderr)
     except subprocess.TimeoutExpired:
-        print("Error: Command timed out.")
+        print("Error: Command timed out.", flush=True)
     except Exception as e:
-        print(f"Error executing command: {e}")
+        print(f"Error executing command: {e}", flush=True)
 
 def main():
-    print(BANNER)
+    print(BANNER, flush=True)
 
     while True:
         try:
@@ -108,16 +113,16 @@ def main():
             cmd_input = sys.stdin.readline()
 
             if not cmd_input:  # EOF
-                print("\nGoodbye!")
+                print("\nGoodbye!", flush=True)
                 break
 
             cmd_input = cmd_input.strip()
             execute_command(cmd_input)
 
         except KeyboardInterrupt:
-            print("\nUse 'exit' to quit.")
+            print("\nUse 'exit' to quit.", flush=True)
         except Exception as e:
-            print(f"Shell error: {e}")
+            print(f"Shell error: {e}", flush=True)
 
 if __name__ == "__main__":
     main()

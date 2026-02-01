@@ -5,6 +5,7 @@
 
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const Docker = require('dockerode');
@@ -26,12 +27,197 @@ const VALID_CREDENTIALS = {
   password: 'r3str1ct3d_2026'
 };
 
+// Load flags from configuration file
+let FLAGS = [];
+try {
+  const flagsPath = process.env.FLAGS_PATH || '/app/flags.json';
+  const flagsData = JSON.parse(fs.readFileSync(flagsPath, 'utf8'));
+  FLAGS = flagsData.flags || [];
+  console.log(`Loaded ${FLAGS.length} flags from configuration`);
+} catch (err) {
+  console.error('Failed to load flags.json:', err.message);
+  // Fallback - no flags will be validated
+}
+
+// JWT utilities (matching frontend implementation)
+function base64UrlEncode(str) {
+  return Buffer.from(str)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function base64UrlDecode(str) {
+  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = base64.length % 4;
+  if (padding) {
+    base64 += '='.repeat(4 - padding);
+  }
+  return Buffer.from(base64, 'base64').toString('utf8');
+}
+
+function decodeJWT(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const header = JSON.parse(base64UrlDecode(parts[0]));
+    const payload = JSON.parse(base64UrlDecode(parts[1]));
+    return { header, payload };
+  } catch (e) {
+    return null;
+  }
+}
+
+function createJWT(payload) {
+  const header = { alg: 'none', typ: 'JWT' };
+  const headerEncoded = base64UrlEncode(JSON.stringify(header));
+  const payloadEncoded = base64UrlEncode(JSON.stringify(payload));
+  return `${headerEncoded}.${payloadEncoded}.`;
+}
+
 app.use(cors());
 app.use(express.json());
 
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'gateway' });
+});
+
+// Session initialization endpoint - creates initial JWT on server
+app.post('/api/session/init', (req, res) => {
+  const { existingToken } = req.body;
+
+  // If there's an existing valid token, return it with parsed data
+  if (existingToken) {
+    const decoded = decodeJWT(existingToken);
+    if (decoded && decoded.payload) {
+      return res.json({
+        token: existingToken,
+        payload: decoded.payload
+      });
+    }
+  }
+
+  // Create new session
+  const payload = {
+    flags_solved: 0,
+    solved_stages: [],
+    found_creds: null,
+    iat: Math.floor(Date.now() / 1000),
+    sub: 'ctf_user'
+  };
+
+  const token = createJWT(payload);
+
+  return res.json({
+    token: token,
+    payload: payload
+  });
+});
+
+// Store credentials endpoint - saves found credentials to JWT
+app.post('/api/session/store-creds', (req, res) => {
+  const { sessionToken, username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: 'Missing credentials' });
+  }
+
+  // Decode existing session token or create new one
+  let currentPayload = {
+    flags_solved: 0,
+    solved_stages: [],
+    found_creds: null,
+    sub: 'ctf_user'
+  };
+
+  if (sessionToken) {
+    const decoded = decodeJWT(sessionToken);
+    if (decoded && decoded.payload) {
+      currentPayload = decoded.payload;
+    }
+  }
+
+  // Check if credentials are already stored
+  if (currentPayload.found_creds) {
+    return res.json({
+      success: true,
+      alreadyStored: true,
+      newToken: sessionToken
+    });
+  }
+
+  // Store the credentials
+  currentPayload.found_creds = { username, password };
+  currentPayload.iat = Math.floor(Date.now() / 1000);
+
+  const newToken = createJWT(currentPayload);
+
+  return res.json({
+    success: true,
+    alreadyStored: false,
+    newToken: newToken
+  });
+});
+
+// Flag validation endpoint
+app.post('/api/validate-flag', (req, res) => {
+  const { potentialFlag, sessionToken } = req.body;
+
+  if (!potentialFlag) {
+    return res.status(400).json({ valid: false, error: 'Missing potentialFlag' });
+  }
+
+  // Check if the potential flag matches any known flag
+  const matchedFlag = FLAGS.find(f => f.value === potentialFlag);
+
+  if (!matchedFlag) {
+    return res.json({ valid: false });
+  }
+
+  // Decode existing session token or create new one
+  let currentPayload = { flags_solved: 0, solved_stages: [], sub: 'ctf_user' };
+  if (sessionToken) {
+    const decoded = decodeJWT(sessionToken);
+    if (decoded && decoded.payload) {
+      currentPayload = decoded.payload;
+    }
+  }
+
+  // Ensure solved_stages is an array
+  if (!Array.isArray(currentPayload.solved_stages)) {
+    currentPayload.solved_stages = [];
+  }
+
+  // Check if this stage was already solved
+  if (currentPayload.solved_stages.includes(matchedFlag.id)) {
+    // Already solved - return success but don't increment
+    return res.json({
+      valid: true,
+      stageId: matchedFlag.id,
+      stageName: matchedFlag.name,
+      alreadySolved: true,
+      newToken: sessionToken,
+      flagsCount: currentPayload.flags_solved
+    });
+  }
+
+  // Add the solved stage and increment count
+  currentPayload.solved_stages.push(matchedFlag.id);
+  currentPayload.flags_solved = currentPayload.solved_stages.length;
+  currentPayload.iat = Math.floor(Date.now() / 1000);
+
+  const newToken = createJWT(currentPayload);
+
+  return res.json({
+    valid: true,
+    stageId: matchedFlag.id,
+    stageName: matchedFlag.name,
+    alreadySolved: false,
+    newToken: newToken,
+    flagsCount: currentPayload.flags_solved
+  });
 });
 
 // Store active sessions
@@ -67,11 +253,12 @@ io.on('connection', (socket) => {
 
         // Create exec instance for the restricted shell
         exec = await container.exec({
-          Cmd: ['su', '-', 'ctf_user', '-c', 'python3 /home/ctf_user/restricted_shell.py'],
+          Cmd: ['su', '-', 'ctf_user', '-c', 'python3 -u /home/ctf_user/restricted_shell.py'],
           AttachStdin: true,
           AttachStdout: true,
           AttachStderr: true,
-          Tty: true
+          Tty: true,
+          Env: ['TERM=xterm-256color', 'PYTHONUNBUFFERED=1']
         });
 
         // Start the exec instance

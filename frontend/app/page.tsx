@@ -10,7 +10,15 @@ import { useFlagJWT } from '@/hooks/useFlagJWT';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'web' | 'terminal'>('web');
-  const { flags, addFlag, refreshFromCookie, isInitialized } = useFlagJWT();
+  const {
+    solvedStages,
+    flagsCount,
+    foundCreds,
+    validateFlag,
+    storeCredentials,
+    refreshFromCookie,
+    isInitialized
+  } = useFlagJWT();
 
   // Poll cookie every 2 seconds to detect manual JWT modifications
   useEffect(() => {
@@ -39,7 +47,7 @@ export default function Home() {
 
       {/* Status Bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-1 flex justify-between items-center flex-shrink-0">
-        <FlagTracker flags={flags} />
+        <FlagTracker solvedStages={solvedStages} flagsCount={flagsCount} />
         <div className="text-sm text-gray-500">
           CyberXperience 2026 | The Shell Chronicles
         </div>
@@ -50,13 +58,21 @@ export default function Home() {
         <TabSelector activeTab={activeTab} onTabChange={setActiveTab} />
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden min-h-0">
-        {activeTab === 'web' ? (
-          <WebExplorer onFlagFound={addFlag} />
-        ) : (
-          <ShellTerminal onFlagFound={addFlag} />
-        )}
+      {/* Main Content - Both components are rendered but only one is visible */}
+      {/* This preserves state when switching tabs */}
+      <div className="flex-1 overflow-hidden min-h-0 relative">
+        <div className={`absolute inset-0 ${activeTab === 'web' ? '' : 'invisible'}`}>
+          <WebExplorer
+            onFlagCandidate={validateFlag}
+            onCredentialsFound={storeCredentials}
+          />
+        </div>
+        <div className={`absolute inset-0 ${activeTab === 'terminal' ? '' : 'invisible'}`}>
+          <ShellTerminal
+            onFlagCandidate={validateFlag}
+            foundCreds={foundCreds}
+          />
+        </div>
       </div>
 
       {/* Footer */}

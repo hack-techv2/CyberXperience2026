@@ -19,22 +19,20 @@ RUN useradd -m -s /bin/bash ctf_user && \
 COPY ctf_user_sudoers /etc/sudoers.d/ctf_user
 RUN chmod 440 /etc/sudoers.d/ctf_user
 
-# Create flag files
-RUN echo "FLAG{c0mm4nd_1nj3ct10n_p1p3_dr34m}" > /home/ctf_user/flag2.txt && \
-    chown ctf_user:ctf_user /home/ctf_user/flag2.txt && \
-    chmod 644 /home/ctf_user/flag2.txt
-
-RUN echo "FLAG{gtf0_f1nd_r00t_4ccess_2026}" > /root/root_flag.txt && \
-    chmod 600 /root/root_flag.txt
-
 # Setup the restricted shell
 COPY restricted_shell.py /home/ctf_user/restricted_shell.py
 RUN chmod +x /home/ctf_user/restricted_shell.py
+
+# Create /app directory and copy the startup script
+RUN mkdir -p /app
+COPY setup_flags.sh /app/setup_flags.sh
+# Fix Windows line endings and make executable
+RUN sed -i 's/\r$//' /app/setup_flags.sh && chmod +x /app/setup_flags.sh
 
 # Create a welcome message
 RUN echo "Welcome to Shell Backend Service" > /etc/motd
 
 WORKDIR /home/ctf_user
 
-# The container will be accessed via the gateway
-CMD ["tail", "-f", "/dev/null"]
+# Use startup script that injects environment variables into flag files
+CMD ["/bin/sh", "-c", "/app/setup_flags.sh && tail -f /dev/null"]

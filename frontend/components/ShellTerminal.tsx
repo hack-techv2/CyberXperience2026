@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import dynamic from 'next/dynamic';
 
@@ -14,21 +14,26 @@ const XTermComponent = dynamic(() => import('./XTermComponent'), {
   ),
 });
 
-interface ShellTerminalProps {
-  onFlagFound: (flag: string) => void;
+interface FoundCreds {
+  username: string;
+  password: string;
 }
 
-export default function ShellTerminal({ onFlagFound }: ShellTerminalProps) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+interface ShellTerminalProps {
+  onFlagCandidate: (flag: string) => void;
+  foundCreds: FoundCreds | null;
+}
+
+export default function ShellTerminal({ onFlagCandidate, foundCreds }: ShellTerminalProps) {
   const [authenticated, setAuthenticated] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
   const [socket, setSocket] = useState<Socket | null>(null);
 
-  // Handle authentication
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Auto-connect when credentials are available
+  const connectWithCreds = useCallback(async (username: string, password: string) => {
+    if (connecting || authenticated) return;
+
     setError('');
     setConnecting(true);
 
@@ -74,6 +79,13 @@ export default function ShellTerminal({ onFlagFound }: ShellTerminalProps) {
       setError('Failed to connect to gateway');
       setConnecting(false);
     }
+  }, [connecting, authenticated]);
+
+  // Handle connect button click
+  const handleConnect = () => {
+    if (foundCreds) {
+      connectWithCreds(foundCreds.username, foundCreds.password);
+    }
   };
 
   // Handle disconnect
@@ -89,6 +101,45 @@ export default function ShellTerminal({ onFlagFound }: ShellTerminalProps) {
       socket?.disconnect();
     };
   }, [socket]);
+
+  // Show "complete stage 1" message if no credentials found
+  if (!foundCreds) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-3 overflow-hidden">
+        {/* Challenge Info */}
+        <div className="max-w-md w-full bg-gray-900 border border-gray-800 rounded p-4 mb-4">
+          <h2 className="text-terminal-yellow font-bold text-sm mb-2">Stage 2 & 3: Shell Access</h2>
+          <p className="text-xs text-gray-400 mb-2">
+            Once you have discovered the credentials, you will be able to access the restricted shell.
+            Find ways to escape the shell restrictions and escalate your privileges.
+          </p>
+          <div className="text-xs text-gray-600 space-y-1">
+            <p><strong>Stage 2 Hint:</strong> The shell filters commands but what about shell operators?</p>
+            <p><strong>Stage 3 Hint:</strong> Check what you can run with <code className="text-terminal-yellow">sudo -l</code></p>
+          </div>
+        </div>
+
+        {/* Locked State */}
+        <div className="max-w-md w-full bg-gray-900 border border-terminal-red/50 rounded p-4">
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <svg className="w-8 h-8 text-terminal-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <h3 className="text-base font-bold text-terminal-red">Shell Access Locked</h3>
+          </div>
+
+          <div className="text-center">
+            <p className="text-sm text-gray-400 mb-2">
+              You must complete <span className="text-terminal-cyan font-bold">Stage 1</span> first.
+            </p>
+            <p className="text-xs text-gray-500">
+              Discover the shell credentials by exploiting the path traversal vulnerability in the Web Explorer tab.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!authenticated) {
     return (
@@ -106,9 +157,25 @@ export default function ShellTerminal({ onFlagFound }: ShellTerminalProps) {
           </div>
         </div>
 
-        {/* Login Form */}
-        <div className="max-w-md w-full bg-gray-900 border border-gray-800 rounded p-4">
-          <h3 className="text-base font-bold mb-3 text-center">Shell Login</h3>
+        {/* Credentials Found - Ready to Connect */}
+        <div className="max-w-md w-full bg-gray-900 border border-terminal-green/50 rounded p-4">
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <svg className="w-8 h-8 text-terminal-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+            </svg>
+            <h3 className="text-base font-bold text-terminal-green">Credentials Discovered!</h3>
+          </div>
+
+          <div className="bg-gray-800 rounded p-3 mb-4 font-mono text-sm">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-gray-400">Username:</span>
+              <span className="text-terminal-cyan">{foundCreds.username}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Password:</span>
+              <span className="text-terminal-cyan">{foundCreds.password}</span>
+            </div>
+          </div>
 
           {error && (
             <div className="mb-3 p-2 bg-terminal-red/20 border border-terminal-red rounded text-terminal-red text-xs">
@@ -116,39 +183,13 @@ export default function ShellTerminal({ onFlagFound }: ShellTerminalProps) {
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-3">
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username"
-                className="w-full"
-                disabled={connecting}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
-                className="w-full"
-                disabled={connecting}
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full btn-primary"
-              disabled={connecting || !username || !password}
-            >
-              {connecting ? 'Connecting...' : 'Connect to Shell'}
-            </button>
-          </form>
+          <button
+            onClick={handleConnect}
+            className="w-full btn-primary"
+            disabled={connecting}
+          >
+            {connecting ? 'Connecting...' : 'Connect to Shell'}
+          </button>
         </div>
       </div>
     );
@@ -163,7 +204,7 @@ export default function ShellTerminal({ onFlagFound }: ShellTerminalProps) {
           <div className="w-2.5 h-2.5 rounded-full bg-terminal-yellow"></div>
           <div className="w-2.5 h-2.5 rounded-full bg-terminal-green"></div>
         </div>
-        <span className="text-xs text-gray-400">Restricted Shell - {username}@shell-backend</span>
+        <span className="text-xs text-gray-400">Restricted Shell - {foundCreds.username}@shell-backend</span>
         <button
           onClick={handleDisconnect}
           className="text-xs text-gray-500 hover:text-terminal-red transition-colors"
@@ -173,7 +214,7 @@ export default function ShellTerminal({ onFlagFound }: ShellTerminalProps) {
       </div>
 
       {/* Terminal Body - xterm.js component */}
-      <XTermComponent socket={socket} onFlagFound={onFlagFound} />
+      <XTermComponent socket={socket} onFlagCandidate={onFlagCandidate} />
 
       {/* Help Panel */}
       <div className="mt-2 bg-gray-900 border border-gray-800 rounded p-2 flex-shrink-0">

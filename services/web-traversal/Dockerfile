@@ -14,18 +14,15 @@ RUN echo "Welcome to the Document Retrieval System v1.0" > /app/public/readme.tx
     echo "Contact: admin@cyberxperience.local" > /app/public/contact.txt && \
     echo "Terms of Service - Standard usage policy applies." > /app/public/terms.txt
 
-# Create the secret credentials file (FLAG 1)
-RUN echo "=== SYSTEM CREDENTIALS ===" > /data/secrets/credentials.txt && \
-    echo "" >> /data/secrets/credentials.txt && \
-    echo "FLAG1: FLAG{p4th_tr4v3rs4l_0pen_d00r}" >> /data/secrets/credentials.txt && \
-    echo "" >> /data/secrets/credentials.txt && \
-    echo "Shell Access Credentials:" >> /data/secrets/credentials.txt && \
-    echo "Username: ctf_user" >> /data/secrets/credentials.txt && \
-    echo "Password: r3str1ct3d_2026" >> /data/secrets/credentials.txt
+# Copy the startup script that creates secrets with environment variables
+COPY create_secrets.sh /app/create_secrets.sh
+# Fix Windows line endings and make executable
+RUN sed -i 's/\r$//' /app/create_secrets.sh && chmod +x /app/create_secrets.sh
 
 # Copy application
 COPY app.py .
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Use startup script that injects environment variable into secrets file
+CMD ["/bin/sh", "-c", "/app/create_secrets.sh && gunicorn --bind 0.0.0.0:5000 app:app"]

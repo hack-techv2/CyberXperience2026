@@ -3,8 +3,8 @@
  *
  * INTENTIONALLY VULNERABLE: Uses "none" algorithm (no signature)
  * This allows users to decode, modify, and re-encode the JWT to "cheat"
- * 
- * Stores only the count of flags solved, not the actual flag values
+ *
+ * JWT issuance is now server-side. This file only contains decoding utilities.
  */
 
 // JWT-safe base64 encoding (URL-safe, no padding)
@@ -27,8 +27,15 @@ export function base64UrlDecode(str: string): string {
   return atob(base64);
 }
 
+export interface FoundCreds {
+  username: string;
+  password: string;
+}
+
 export interface JWTPayload {
   flags_solved: number;
+  solved_stages?: string[];
+  found_creds?: FoundCreds | null;
   iat: number;
   sub: string;
 }
@@ -36,19 +43,6 @@ export interface JWTPayload {
 export interface DecodedJWT {
   header: { alg: string; typ: string };
   payload: JWTPayload;
-}
-
-/**
- * Create a JWT with "none" algorithm (intentionally vulnerable)
- */
-export function createJWT(payload: JWTPayload): string {
-  const header = { alg: 'none', typ: 'JWT' };
-
-  const headerEncoded = base64UrlEncode(JSON.stringify(header));
-  const payloadEncoded = base64UrlEncode(JSON.stringify(payload));
-
-  // With "none" algorithm, signature is empty
-  return `${headerEncoded}.${payloadEncoded}.`;
 }
 
 /**
@@ -80,37 +74,4 @@ export function decodeJWT(token: string): DecodedJWT | null {
     console.error('Failed to decode JWT:', e);
     return null;
   }
-}
-
-/**
- * Increment flag count in the JWT and return a new token
- */
-export function addFlagToJWT(token: string): string | null {
-  const decoded = decodeJWT(token);
-  if (!decoded) {
-    return null;
-  }
-
-  const currentCount = decoded.payload.flags_solved || 0;
-
-  const newPayload: JWTPayload = {
-    ...decoded.payload,
-    flags_solved: currentCount + 1,
-    iat: Math.floor(Date.now() / 1000),
-  };
-
-  return createJWT(newPayload);
-}
-
-/**
- * Create an initial JWT for a new visitor
- */
-export function createInitialJWT(): string {
-  const payload: JWTPayload = {
-    flags_solved: 0,
-    iat: Math.floor(Date.now() / 1000),
-    sub: 'ctf_user',
-  };
-
-  return createJWT(payload);
 }

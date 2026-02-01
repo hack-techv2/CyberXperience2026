@@ -9,7 +9,7 @@ import 'xterm/css/xterm.css';
 
 interface XTermComponentProps {
   socket: Socket | null;
-  onFlagFound: (flag: string) => void;
+  onFlagCandidate: (flag: string) => void;
 }
 
 // JetBrains IDE-style terminal theme matching globals.css colors
@@ -40,19 +40,19 @@ const TERMINAL_THEME = {
 
 const FLAG_REGEX = /FLAG\{[^}]+\}/g;
 
-export default function XTermComponent({ socket, onFlagFound }: XTermComponentProps) {
+export default function XTermComponent({ socket, onFlagCandidate }: XTermComponentProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const isInitializedRef = useRef(false);
 
-  // Flag detection callback
+  // Flag detection callback - sends candidates to server for validation
   const checkForFlags = useCallback((text: string) => {
     const matches = text.match(FLAG_REGEX);
     if (matches) {
-      matches.forEach(flag => onFlagFound(flag));
+      matches.forEach(flag => onFlagCandidate(flag));
     }
-  }, [onFlagFound]);
+  }, [onFlagCandidate]);
 
   // Initialize xterm.js terminal
   useEffect(() => {
@@ -68,6 +68,8 @@ export default function XTermComponent({ socket, onFlagFound }: XTermComponentPr
       scrollback: 1000,
       allowProposedApi: true,
       convertEol: true,
+      disableStdin: false,
+      windowsMode: false,
     });
 
     const fitAddon = new FitAddon();
