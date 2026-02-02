@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import dynamic from 'next/dynamic';
 import type { FoundCreds } from '@/hooks/useFlagJWT';
@@ -26,9 +26,8 @@ export default function ShellTerminal({ onFlagCandidate, foundCreds }: ShellTerm
   const [error, setError] = useState('');
   const [socket, setSocket] = useState<Socket | null>(null);
   const [initialOutput, setInitialOutput] = useState<string>('');
-  const hasAutoConnectedRef = useRef(false);
 
-  // Auto-connect when credentials are available
+  // Connect to shell with given credentials
   const connectWithCreds = useCallback(async (username: string, password: string) => {
     if (connecting || authenticated) return;
 
@@ -102,14 +101,6 @@ export default function ShellTerminal({ onFlagCandidate, foundCreds }: ShellTerm
       socket?.disconnect();
     };
   }, [socket]);
-
-  // Auto-connect when credentials are available (e.g., after page refresh)
-  useEffect(() => {
-    if (foundCreds && !hasAutoConnectedRef.current && !authenticated && !connecting) {
-      hasAutoConnectedRef.current = true;
-      connectWithCreds(foundCreds.username, foundCreds.password);
-    }
-  }, [foundCreds, authenticated, connecting, connectWithCreds]);
 
   // Show "complete stage 1" message if no credentials found
   if (!foundCreds) {

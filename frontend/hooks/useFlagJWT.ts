@@ -37,7 +37,7 @@ export function useFlagJWT(): UseFlagJWTResult {
   const validatingRef = useRef<Set<string>>(new Set());
   const storingCredsRef = useRef(false);
   const initStartedRef = useRef(false); // Prevents duplicate initSession in StrictMode
-  const validationQueueRef = useRef<Promise<boolean>>(Promise.resolve(false)); // Queue for sequential flag processing
+  const operationQueueRef = useRef<Promise<boolean>>(Promise.resolve(false)); // Queue for sequential flag/creds processing
 
   // Read state from the cookie and update state
   // Uses defensive updates - never decrements flag count or removes solved stages
@@ -157,7 +157,7 @@ export function useFlagJWT(): UseFlagJWTResult {
     }
 
     // Queue this validation after any pending ones
-    const resultPromise = validationQueueRef.current.then(async (): Promise<boolean> => {
+    const resultPromise = operationQueueRef.current.then(async (): Promise<boolean> => {
       // Double-check after waiting in queue
       if (validatingRef.current.has(potentialFlag)) {
         return false;
@@ -216,70 +216,83 @@ export function useFlagJWT(): UseFlagJWTResult {
     });
 
     // Update the queue to wait for this validation
-    validationQueueRef.current = resultPromise.catch(() => false);
+    operationQueueRef.current = resultPromise.catch(() => false);
 
     return resultPromise;
   }, []);
 
   // Store found credentials with the server
+  // Uses the same queue as validateFlag to prevent race conditions
   const storeCredentials = useCallback(async (username: string, password: string): Promise<boolean> => {
-    // Prevent duplicate store requests
-    if (storingCredsRef.current) {
-      return false;
-    }
-
-    // Already have credentials stored
-    if (foundCreds) {
-      return true;
-    }
-
-    storingCredsRef.current = true;
-
-    try {
-      const sessionToken = Cookies.get(COOKIE_NAME);
-      const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
-
-      const response = await fetch(`${gatewayUrl}/api/session/store-creds`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionToken,
-          username,
-          password,
-        }),
-      });
-
-      if (!response.ok) {
+    // Queue this operation after any pending ones
+    const resultPromise = operationQueueRef.current.then(async (): Promise<boolean> => {
+      // Prevent duplicate store requests
+      if (storingCredsRef.current) {
         return false;
       }
 
-      const result = await response.json();
-
-      if (result.success && result.newToken) {
-        // Update cookie with new token
-        Cookies.set(COOKIE_NAME, result.newToken, {
-          expires: 7,
-          sameSite: 'lax',
-        });
-
-        // Update state
-        if (!result.alreadyStored) {
-          setFoundCreds({ username, password });
+      // Fresh check inside queue - credentials might have been stored by previous operation
+      const currentToken = Cookies.get(COOKIE_NAME);
+      if (currentToken) {
+        const decoded = decodeJWT(currentToken);
+        if (decoded?.payload?.found_creds) {
+          return true; // Already stored
         }
-
-        return true;
       }
 
-      return false;
-    } catch (error) {
-      console.error('Store credentials error:', error);
-      return false;
-    } finally {
-      storingCredsRef.current = false;
-    }
-  }, [foundCreds]);
+      storingCredsRef.current = true;
+
+      try {
+        // Fresh cookie read inside queue - guaranteed after any previous operation completed
+        const sessionToken = Cookies.get(COOKIE_NAME);
+        const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+
+        const response = await fetch(`${gatewayUrl}/api/session/store-creds`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionToken,
+            username,
+            password,
+          }),
+        });
+
+        if (!response.ok) {
+          return false;
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.newToken) {
+          // Update cookie with new token
+          Cookies.set(COOKIE_NAME, result.newToken, {
+            expires: 7,
+            sameSite: 'lax',
+          });
+
+          // Update state
+          if (!result.alreadyStored) {
+            setFoundCreds({ username, password });
+          }
+
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        console.error('Store credentials error:', error);
+        return false;
+      } finally {
+        storingCredsRef.current = false;
+      }
+    });
+
+    // Update the queue
+    operationQueueRef.current = resultPromise.catch(() => false);
+    return resultPromise;
+  }, []); // No dependencies - check inside queue instead
 
   return {
     solvedStages,
