@@ -268,19 +268,35 @@ io.on('connection', (socket) => {
           Tty: true
         });
 
-        // Store session
-        activeSessions.set(socket.id, { exec, stream, container });
+        // Buffer to collect initial output (like banner)
+        let outputBuffer = '';
+        let shellReady = false;
 
-        // Handle output from container
+        // IMMEDIATELY attach output handler to catch banner
         stream.on('data', (chunk) => {
-          socket.emit('output', chunk.toString());
+          const data = chunk.toString();
+          if (!shellReady) {
+            outputBuffer += data;
+          } else {
+            socket.emit('output', data);
+          }
         });
 
         stream.on('end', () => {
           socket.emit('shell_closed', { message: 'Shell session ended' });
         });
 
-        socket.emit('shell_ready', { message: 'Shell connected' });
+        // Store session
+        activeSessions.set(socket.id, { exec, stream, container });
+
+        // Delay to capture banner, then emit shell_ready with buffered output
+        setTimeout(() => {
+          shellReady = true;
+          socket.emit('shell_ready', {
+            message: 'Shell connected',
+            initialOutput: outputBuffer
+          });
+        }, 50);
 
       } catch (err) {
         console.error('Error connecting to shell:', err);

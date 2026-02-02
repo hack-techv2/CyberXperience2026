@@ -5,15 +5,17 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
 import { Socket } from 'socket.io-client';
+import { useTheme } from '@/contexts/ThemeContext';
 import 'xterm/css/xterm.css';
 
 interface XTermComponentProps {
   socket: Socket | null;
   onFlagCandidate: (flag: string) => void;
+  initialOutput?: string;
 }
 
-// JetBrains IDE-style terminal theme matching globals.css colors
-const TERMINAL_THEME = {
+// JetBrains IDE-style dark terminal theme
+const DARK_THEME = {
   background: '#0d1117',
   foreground: '#c9d1d9',
   cursor: '#58a6ff',
@@ -38,13 +40,40 @@ const TERMINAL_THEME = {
   brightWhite: '#f0f6fc',
 };
 
+// Light terminal theme
+const LIGHT_THEME = {
+  background: '#ffffff',
+  foreground: '#24292f',
+  cursor: '#0969da',
+  cursorAccent: '#ffffff',
+  selectionBackground: '#0969da33',
+  selectionForeground: '#24292f',
+  black: '#24292f',
+  red: '#cf222e',
+  green: '#116329',
+  yellow: '#9a6700',
+  blue: '#0969da',
+  magenta: '#8250df',
+  cyan: '#1b7c83',
+  white: '#6e7781',
+  brightBlack: '#57606a',
+  brightRed: '#a40e26',
+  brightGreen: '#1a7f37',
+  brightYellow: '#7d4e00',
+  brightBlue: '#218bff',
+  brightMagenta: '#a475f9',
+  brightCyan: '#3192aa',
+  brightWhite: '#8c959f',
+};
+
 const FLAG_REGEX = /FLAG\{[^}]+\}/g;
 
-export default function XTermComponent({ socket, onFlagCandidate }: XTermComponentProps) {
+export default function XTermComponent({ socket, onFlagCandidate, initialOutput }: XTermComponentProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const isInitializedRef = useRef(false);
+  const { theme } = useTheme();
 
   // Flag detection callback - sends candidates to server for validation
   const checkForFlags = useCallback((text: string) => {
@@ -59,7 +88,7 @@ export default function XTermComponent({ socket, onFlagCandidate }: XTermCompone
     if (!terminalRef.current || isInitializedRef.current) return;
 
     const terminal = new Terminal({
-      theme: TERMINAL_THEME,
+      theme: theme === 'dark' ? DARK_THEME : LIGHT_THEME,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace",
       fontSize: 14,
       lineHeight: 1.2,
@@ -101,6 +130,19 @@ export default function XTermComponent({ socket, onFlagCandidate }: XTermCompone
       isInitializedRef.current = false;
     };
   }, []);
+
+  // Update terminal theme when theme changes
+  useEffect(() => {
+    if (!xtermRef.current) return;
+    xtermRef.current.options.theme = theme === 'dark' ? DARK_THEME : LIGHT_THEME;
+  }, [theme]);
+
+  // Write initial output when terminal is ready
+  useEffect(() => {
+    if (!xtermRef.current || !initialOutput) return;
+    xtermRef.current.write(initialOutput);
+    checkForFlags(initialOutput);
+  }, [initialOutput, checkForFlags]);
 
   // Connect socket to terminal I/O
   useEffect(() => {
@@ -203,7 +245,7 @@ export default function XTermComponent({ socket, onFlagCandidate }: XTermCompone
       ref={terminalRef}
       className="flex-1 rounded-b overflow-hidden xterm-container min-h-0"
       style={{
-        backgroundColor: TERMINAL_THEME.background,
+        backgroundColor: theme === 'dark' ? DARK_THEME.background : LIGHT_THEME.background,
       }}
     />
   );

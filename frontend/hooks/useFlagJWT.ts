@@ -37,6 +37,7 @@ export function useFlagJWT(): UseFlagJWTResult {
   const validatingRef = useRef<Set<string>>(new Set());
   const storingCredsRef = useRef(false);
   const initStartedRef = useRef(false); // Prevents duplicate initSession in StrictMode
+  const validationQueueRef = useRef<Promise<boolean>>(Promise.resolve(false)); // Queue for sequential flag processing
 
   // Read state from the cookie and update state
   // Uses defensive updates - never decrements flag count or removes solved stages
@@ -148,61 +149,76 @@ export function useFlagJWT(): UseFlagJWTResult {
   }, []);
 
   // Validate a potential flag with the server
+  // Uses a queue to ensure sequential processing and prevent race conditions
   const validateFlag = useCallback(async (potentialFlag: string): Promise<boolean> => {
     // Prevent duplicate validation requests for the same flag
     if (validatingRef.current.has(potentialFlag)) {
       return false;
     }
 
-    validatingRef.current.add(potentialFlag);
-
-    try {
-      const sessionToken = Cookies.get(COOKIE_NAME);
-      const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
-
-      const response = await fetch(`${gatewayUrl}/api/validate-flag`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          potentialFlag,
-          sessionToken,
-        }),
-      });
-
-      if (!response.ok) {
+    // Queue this validation after any pending ones
+    const resultPromise = validationQueueRef.current.then(async (): Promise<boolean> => {
+      // Double-check after waiting in queue
+      if (validatingRef.current.has(potentialFlag)) {
         return false;
       }
 
-      const result = await response.json();
+      validatingRef.current.add(potentialFlag);
 
-      if (result.valid && result.newToken) {
-        // Update cookie with new token
-        Cookies.set(COOKIE_NAME, result.newToken, {
-          expires: 7,
-          sameSite: 'lax',
+      try {
+        // Fresh cookie read - guaranteed after any previous validation completed
+        const sessionToken = Cookies.get(COOKIE_NAME);
+        const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+
+        const response = await fetch(`${gatewayUrl}/api/validate-flag`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            potentialFlag,
+            sessionToken,
+          }),
         });
 
-        // Update state if this is a newly solved stage
-        if (!result.alreadySolved) {
-          setSolvedStages(prev => {
-            if (prev.includes(result.stageId)) return prev;
-            return [...prev, result.stageId];
-          });
-          setFlagsCount(result.flagsCount);
+        if (!response.ok) {
+          return false;
         }
 
-        return true;
-      }
+        const result = await response.json();
 
-      return false;
-    } catch (error) {
-      console.error('Flag validation error:', error);
-      return false;
-    } finally {
-      validatingRef.current.delete(potentialFlag);
-    }
+        if (result.valid && result.newToken) {
+          // Update cookie with new token
+          Cookies.set(COOKIE_NAME, result.newToken, {
+            expires: 7,
+            sameSite: 'lax',
+          });
+
+          // Update state if this is a newly solved stage
+          if (!result.alreadySolved) {
+            setSolvedStages(prev => {
+              if (prev.includes(result.stageId)) return prev;
+              return [...prev, result.stageId];
+            });
+            setFlagsCount(result.flagsCount);
+          }
+
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        console.error('Flag validation error:', error);
+        return false;
+      } finally {
+        validatingRef.current.delete(potentialFlag);
+      }
+    });
+
+    // Update the queue to wait for this validation
+    validationQueueRef.current = resultPromise.catch(() => false);
+
+    return resultPromise;
   }, []);
 
   // Store found credentials with the server

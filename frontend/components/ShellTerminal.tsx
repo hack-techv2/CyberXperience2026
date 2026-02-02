@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import dynamic from 'next/dynamic';
 import type { FoundCreds } from '@/hooks/useFlagJWT';
@@ -25,6 +25,8 @@ export default function ShellTerminal({ onFlagCandidate, foundCreds }: ShellTerm
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [initialOutput, setInitialOutput] = useState<string>('');
+  const hasAutoConnectedRef = useRef(false);
 
   // Auto-connect when credentials are available
   const connectWithCreds = useCallback(async (username: string, password: string) => {
@@ -51,9 +53,12 @@ export default function ShellTerminal({ onFlagCandidate, foundCreds }: ShellTerm
         newSocket.disconnect();
       });
 
-      newSocket.on('shell_ready', () => {
+      newSocket.on('shell_ready', (data) => {
         setAuthenticated(true);
         setConnecting(false);
+        if (data?.initialOutput) {
+          setInitialOutput(data.initialOutput);
+        }
       });
 
       newSocket.on('error', (data) => {
@@ -97,6 +102,14 @@ export default function ShellTerminal({ onFlagCandidate, foundCreds }: ShellTerm
       socket?.disconnect();
     };
   }, [socket]);
+
+  // Auto-connect when credentials are available (e.g., after page refresh)
+  useEffect(() => {
+    if (foundCreds && !hasAutoConnectedRef.current && !authenticated && !connecting) {
+      hasAutoConnectedRef.current = true;
+      connectWithCreds(foundCreds.username, foundCreds.password);
+    }
+  }, [foundCreds, authenticated, connecting, connectWithCreds]);
 
   // Show "complete stage 1" message if no credentials found
   if (!foundCreds) {
@@ -210,7 +223,7 @@ export default function ShellTerminal({ onFlagCandidate, foundCreds }: ShellTerm
       </div>
 
       {/* Terminal Body - xterm.js component */}
-      <XTermComponent socket={socket} onFlagCandidate={onFlagCandidate} />
+      <XTermComponent socket={socket} onFlagCandidate={onFlagCandidate} initialOutput={initialOutput} />
 
       {/* Help Panel */}
       <div className="mt-2 bg-gray-900 border border-gray-800 rounded p-2 flex-shrink-0">
