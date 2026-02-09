@@ -42,8 +42,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5000:5000"
-    environment:
-      - FLAG_STAGE1=FLAG{p4th_tr4v3rs4l_0pen_d00r}
+    volumes:
+      - ./flags.json:/app/flags.json:ro
     networks:
       - ctf-network
 

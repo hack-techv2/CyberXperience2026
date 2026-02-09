@@ -105,7 +105,11 @@ app.post('/api/session/init', (req, res) => {
     solved_stages: [],
     found_creds: null,
     iat: Math.floor(Date.now() / 1000),
-    sub: 'ctf_user'
+    sub: 'ctf_user',
+    // Baby Shell tutorial fields
+    experience_level: 'unknown',  // 'unknown' | 'beginner' | 'experienced'
+    baby_shell_step: 0,           // Current completed step (0-10)
+    baby_shell_completed: false
   };
 
   const token = createJWT(payload);
@@ -158,6 +162,95 @@ app.post('/api/session/store-creds', (req, res) => {
     success: true,
     alreadyStored: false,
     newToken: newToken
+  });
+});
+
+// Set experience level endpoint - saves beginner/experienced choice
+app.post('/api/session/set-experience', (req, res) => {
+  const { sessionToken, experienceLevel } = req.body;
+
+  if (!experienceLevel || !['beginner', 'experienced'].includes(experienceLevel)) {
+    return res.status(400).json({ success: false, error: 'Invalid experience level' });
+  }
+
+  // Decode existing session token or create new one
+  let currentPayload = {
+    flags_solved: 0,
+    solved_stages: [],
+    found_creds: null,
+    sub: 'ctf_user',
+    experience_level: 'unknown',
+    baby_shell_step: 0,
+    baby_shell_completed: false
+  };
+
+  if (sessionToken) {
+    const decoded = decodeJWT(sessionToken);
+    if (decoded && decoded.payload) {
+      currentPayload = decoded.payload;
+    }
+  }
+
+  // Update experience level
+  currentPayload.experience_level = experienceLevel;
+  currentPayload.iat = Math.floor(Date.now() / 1000);
+
+  const newToken = createJWT(currentPayload);
+
+  return res.json({
+    success: true,
+    newToken: newToken
+  });
+});
+
+// Baby Shell step validation endpoint
+app.post('/api/baby-shell/validate-step', (req, res) => {
+  const { sessionToken, stepNumber } = req.body;
+
+  if (typeof stepNumber !== 'number' || stepNumber < 1 || stepNumber > 10) {
+    return res.status(400).json({ success: false, error: 'Invalid step number' });
+  }
+
+  // Decode existing session token
+  let currentPayload = {
+    flags_solved: 0,
+    solved_stages: [],
+    found_creds: null,
+    sub: 'ctf_user',
+    experience_level: 'unknown',
+    baby_shell_step: 0,
+    baby_shell_completed: false
+  };
+
+  if (sessionToken) {
+    const decoded = decodeJWT(sessionToken);
+    if (decoded && decoded.payload) {
+      currentPayload = decoded.payload;
+    }
+  }
+
+  // Only accept next step (no skipping)
+  const expectedStep = (currentPayload.baby_shell_step || 0) + 1;
+  if (stepNumber !== expectedStep) {
+    return res.json({
+      success: false,
+      error: stepNumber < expectedStep ? 'Step already completed' : 'Complete previous steps first',
+      currentStep: currentPayload.baby_shell_step
+    });
+  }
+
+  // Update step progress
+  currentPayload.baby_shell_step = stepNumber;
+  currentPayload.baby_shell_completed = stepNumber === 10;
+  currentPayload.iat = Math.floor(Date.now() / 1000);
+
+  const newToken = createJWT(currentPayload);
+
+  return res.json({
+    success: true,
+    newToken: newToken,
+    stepCompleted: stepNumber,
+    isComplete: stepNumber === 10
   });
 });
 

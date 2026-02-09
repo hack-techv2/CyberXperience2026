@@ -10,6 +10,7 @@ interface WebExplorerProps {
 interface HistoryEntry {
   command: string;
   output: string;
+  prompt: string;  // Capture prompt at execution time (before cd changes path)
   isError?: boolean;
 }
 
@@ -300,8 +301,11 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Capture prompt BEFORE processing command (before cd changes currentPath)
+    const capturedPrompt = getPrompt();
+
     if (!currentInput.trim()) {
-      setHistory(prev => [...prev, { command: '', output: '' }]);
+      setHistory(prev => [...prev, { command: '', output: '', prompt: capturedPrompt }]);
       return;
     }
 
@@ -313,7 +317,12 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
     const result = await processCommand(input);
 
     if (input.toLowerCase().trim() !== 'clear') {
-      setHistory(prev => [...prev, { command: input, output: result.output, isError: result.isError }]);
+      setHistory(prev => [...prev, {
+        command: input,
+        output: result.output,
+        prompt: capturedPrompt,  // Use captured prompt, not current
+        isError: result.isError
+      }]);
     }
   };
 
@@ -361,15 +370,13 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
 
   // Show banner on mount
   useEffect(() => {
-    setHistory([{ command: '', output: BANNER }]);
+    setHistory([{ command: '', output: BANNER, prompt: '' }]);
   }, []);
 
-  // Get prompt string
+  // Get prompt string - show raw path (including ..) to let users see their navigation
   const getPrompt = () => {
-    // Check resolved path to determine if we're in home directory
-    const resolvedPath = normalizePath(currentPath);
-    const path = resolvedPath === '/mnt/shell' ? '~' : currentPath;
-    return `guest@docserver:${path}$ `;
+    const displayPath = currentPath === '/mnt/shell' ? '~' : currentPath;
+    return `guest@docserver:${displayPath}$ `;
   };
 
   return (
@@ -410,7 +417,7 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
             <div key={index} className="mb-1">
               {entry.command && (
                 <div className="flex">
-                  <span className="text-terminal-green">{getPrompt()}</span>
+                  <span className="text-terminal-green">{entry.prompt || getPrompt()}</span>
                   <span className="text-terminal-fg">{entry.command}</span>
                 </div>
               )}

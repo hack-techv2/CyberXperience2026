@@ -1,13 +1,26 @@
 'use client';
 
 interface TabSelectorProps {
-  activeTab: 'web' | 'terminal';
-  onTabChange: (tab: 'web' | 'terminal') => void;
+  activeTab: 'baby' | 'web' | 'terminal';
+  onTabChange: (tab: 'baby' | 'web' | 'terminal') => void;
 }
 
 export default function TabSelector({ activeTab, onTabChange }: TabSelectorProps) {
   return (
     <div className="flex border-b border-gray-800 bg-gray-900">
+      {/* Stage 0: Baby Shell */}
+      <button
+        className={`tab flex items-center gap-2 ${activeTab === 'baby' ? 'active' : ''}`}
+        onClick={() => onTabChange('baby')}
+      >
+        <span className="text-base">🍼</span>
+        <span>Stage 0: Baby Shell</span>
+        <span className="text-xs px-2 py-0.5 bg-terminal-purple/20 text-terminal-purple rounded">
+          Tutorial
+        </span>
+      </button>
+
+      {/* Stage 1: Shell Breakout */}
       <button
         className={`tab flex items-center gap-2 ${activeTab === 'web' ? 'active' : ''}`}
         onClick={() => onTabChange('web')}
@@ -21,6 +34,7 @@ export default function TabSelector({ activeTab, onTabChange }: TabSelectorProps
         </span>
       </button>
 
+      {/* Stage 2 & 3: Shell Terminal */}
       <button
         className={`tab flex items-center gap-2 ${activeTab === 'terminal' ? 'active' : ''}`}
         onClick={() => onTabChange('terminal')}

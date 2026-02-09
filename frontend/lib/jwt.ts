@@ -24,6 +24,10 @@ interface JWTPayload {
   found_creds?: { username: string; password: string } | null;
   iat: number;
   sub: string;
+  // Baby Shell tutorial fields
+  experience_level?: 'unknown' | 'beginner' | 'experienced';
+  baby_shell_step?: number;
+  baby_shell_completed?: boolean;
 }
 
 interface DecodedJWT {

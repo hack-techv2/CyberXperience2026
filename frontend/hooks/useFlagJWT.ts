@@ -11,6 +11,8 @@ export interface FoundCreds {
   password: string;
 }
 
+export type ExperienceLevel = 'unknown' | 'beginner' | 'experienced';
+
 export interface UseFlagJWTResult {
   solvedStages: string[];
   flagsCount: number;
@@ -19,6 +21,12 @@ export interface UseFlagJWTResult {
   storeCredentials: (username: string, password: string) => Promise<boolean>;
   refreshFromCookie: () => void;
   isInitialized: boolean;
+  // Baby Shell fields
+  experienceLevel: ExperienceLevel;
+  babyShellStep: number;
+  babyShellCompleted: boolean;
+  setExperienceLevel: (level: 'beginner' | 'experienced') => Promise<boolean>;
+  validateBabyShellStep: (stepNumber: number) => Promise<boolean>;
 }
 
 /**
@@ -34,8 +42,15 @@ export function useFlagJWT(): UseFlagJWTResult {
   const [flagsCount, setFlagsCount] = useState(0);
   const [foundCreds, setFoundCreds] = useState<FoundCreds | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  // Baby Shell state
+  const [experienceLevel, setExperienceLevelState] = useState<ExperienceLevel>('unknown');
+  const [babyShellStep, setBabyShellStep] = useState(0);
+  const [babyShellCompleted, setBabyShellCompleted] = useState(false);
+
   const validatingRef = useRef<Set<string>>(new Set());
   const storingCredsRef = useRef(false);
+  const settingExperienceRef = useRef(false);
+  const validatingStepRef = useRef(false);
   const initStartedRef = useRef(false); // Prevents duplicate initSession in StrictMode
   const operationQueueRef = useRef<Promise<boolean>>(Promise.resolve(false)); // Queue for sequential flag/creds processing
 
@@ -52,6 +67,11 @@ export function useFlagJWT(): UseFlagJWTResult {
           : [];
         const creds = decoded.payload.found_creds || null;
 
+        // Baby Shell fields
+        const expLevel = decoded.payload.experience_level || 'unknown';
+        const shellStep = decoded.payload.baby_shell_step || 0;
+        const shellCompleted = decoded.payload.baby_shell_completed || false;
+
         // Defensive: only increment, never decrement
         setFlagsCount(prev => Math.max(prev, count));
         setSolvedStages(prev => {
@@ -61,6 +81,11 @@ export function useFlagJWT(): UseFlagJWTResult {
         });
         // Credentials can be set if we don't have them
         setFoundCreds(prev => prev || creds);
+
+        // Baby Shell: update if different
+        setExperienceLevelState(expLevel as ExperienceLevel);
+        setBabyShellStep(prev => Math.max(prev, shellStep));
+        setBabyShellCompleted(prev => prev || shellCompleted);
       }
     }
   }, []);
@@ -105,9 +130,17 @@ export function useFlagJWT(): UseFlagJWTResult {
             : [];
           const creds = payload.found_creds || null;
 
+          // Baby Shell fields
+          const expLevel = payload.experience_level || 'unknown';
+          const shellStep = payload.baby_shell_step || 0;
+          const shellCompleted = payload.baby_shell_completed || false;
+
           setSolvedStages(stages);
           setFlagsCount(count);
           setFoundCreds(creds);
+          setExperienceLevelState(expLevel as ExperienceLevel);
+          setBabyShellStep(shellStep);
+          setBabyShellCompleted(shellCompleted);
         } else {
           // Server error - fallback to reading existing cookie if available
           if (existingToken) {
@@ -118,9 +151,15 @@ export function useFlagJWT(): UseFlagJWTResult {
                 ? decoded.payload.solved_stages
                 : [];
               const creds = decoded.payload.found_creds || null;
+              const expLevel = decoded.payload.experience_level || 'unknown';
+              const shellStep = decoded.payload.baby_shell_step || 0;
+              const shellCompleted = decoded.payload.baby_shell_completed || false;
               setSolvedStages(stages);
               setFlagsCount(count);
               setFoundCreds(creds);
+              setExperienceLevelState(expLevel as ExperienceLevel);
+              setBabyShellStep(shellStep);
+              setBabyShellCompleted(shellCompleted);
             }
           }
         }
@@ -135,9 +174,15 @@ export function useFlagJWT(): UseFlagJWTResult {
               ? decoded.payload.solved_stages
               : [];
             const creds = decoded.payload.found_creds || null;
+            const expLevel = decoded.payload.experience_level || 'unknown';
+            const shellStep = decoded.payload.baby_shell_step || 0;
+            const shellCompleted = decoded.payload.baby_shell_completed || false;
             setSolvedStages(stages);
             setFlagsCount(count);
             setFoundCreds(creds);
+            setExperienceLevelState(expLevel as ExperienceLevel);
+            setBabyShellStep(shellStep);
+            setBabyShellCompleted(shellCompleted);
           }
         }
       }
@@ -294,6 +339,115 @@ export function useFlagJWT(): UseFlagJWTResult {
     return resultPromise;
   }, []); // No dependencies - check inside queue instead
 
+  // Set experience level (beginner/experienced)
+  const setExperienceLevel = useCallback(async (level: 'beginner' | 'experienced'): Promise<boolean> => {
+    // Queue this operation
+    const resultPromise = operationQueueRef.current.then(async (): Promise<boolean> => {
+      if (settingExperienceRef.current) {
+        return false;
+      }
+
+      settingExperienceRef.current = true;
+
+      try {
+        const sessionToken = Cookies.get(COOKIE_NAME);
+        const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+
+        const response = await fetch(`${gatewayUrl}/api/session/set-experience`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionToken,
+            experienceLevel: level,
+          }),
+        });
+
+        if (!response.ok) {
+          return false;
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.newToken) {
+          Cookies.set(COOKIE_NAME, result.newToken, {
+            expires: 7,
+            sameSite: 'lax',
+          });
+          setExperienceLevelState(level);
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        console.error('Set experience level error:', error);
+        return false;
+      } finally {
+        settingExperienceRef.current = false;
+      }
+    });
+
+    operationQueueRef.current = resultPromise.catch(() => false);
+    return resultPromise;
+  }, []);
+
+  // Validate Baby Shell step completion
+  const validateBabyShellStep = useCallback(async (stepNumber: number): Promise<boolean> => {
+    // Queue this operation
+    const resultPromise = operationQueueRef.current.then(async (): Promise<boolean> => {
+      if (validatingStepRef.current) {
+        return false;
+      }
+
+      validatingStepRef.current = true;
+
+      try {
+        const sessionToken = Cookies.get(COOKIE_NAME);
+        const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+
+        const response = await fetch(`${gatewayUrl}/api/baby-shell/validate-step`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionToken,
+            stepNumber,
+          }),
+        });
+
+        if (!response.ok) {
+          return false;
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.newToken) {
+          Cookies.set(COOKIE_NAME, result.newToken, {
+            expires: 7,
+            sameSite: 'lax',
+          });
+          setBabyShellStep(result.stepCompleted);
+          if (result.isComplete) {
+            setBabyShellCompleted(true);
+          }
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        console.error('Validate baby shell step error:', error);
+        return false;
+      } finally {
+        validatingStepRef.current = false;
+      }
+    });
+
+    operationQueueRef.current = resultPromise.catch(() => false);
+    return resultPromise;
+  }, []);
+
   return {
     solvedStages,
     flagsCount,
@@ -302,5 +456,11 @@ export function useFlagJWT(): UseFlagJWTResult {
     storeCredentials,
     refreshFromCookie,
     isInitialized,
+    // Baby Shell fields
+    experienceLevel,
+    babyShellStep,
+    babyShellCompleted,
+    setExperienceLevel,
+    validateBabyShellStep,
   };
 }

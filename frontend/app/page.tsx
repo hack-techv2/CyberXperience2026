@@ -1,16 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Banner from '@/components/Banner';
 import TabSelector from '@/components/TabSelector';
 import WebExplorer from '@/components/WebExplorer';
 import ShellTerminal from '@/components/ShellTerminal';
+import BabyShell from '@/components/BabyShell';
+import ExperienceModal from '@/components/ExperienceModal';
 import FlagTracker from '@/components/FlagTracker';
 import { useFlagJWT } from '@/hooks/useFlagJWT';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'web' | 'terminal'>('web');
+  const [activeTab, setActiveTab] = useState<'baby' | 'web' | 'terminal'>('web');
   const {
     solvedStages,
     flagsCount,
@@ -18,9 +20,24 @@ export default function Home() {
     validateFlag,
     storeCredentials,
     refreshFromCookie,
-    isInitialized
+    isInitialized,
+    // Baby Shell fields
+    experienceLevel,
+    babyShellStep,
+    babyShellCompleted,
+    setExperienceLevel,
+    validateBabyShellStep,
   } = useFlagJWT();
   const { theme, toggleTheme } = useTheme();
+
+  // Handle experience level selection from modal
+  const handleExperienceSelect = useCallback(async (level: 'beginner' | 'experienced') => {
+    await setExperienceLevel(level);
+    // If beginner, switch to Baby Shell tab
+    if (level === 'beginner') {
+      setActiveTab('baby');
+    }
+  }, [setExperienceLevel]);
 
   // Poll cookie every 2 seconds to detect manual JWT modifications
   useEffect(() => {
@@ -30,6 +47,13 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [refreshFromCookie]);
+
+  // Auto-redirect beginners to Stage 0 on page load
+  useEffect(() => {
+    if (isInitialized && experienceLevel === 'beginner' && !babyShellCompleted) {
+      setActiveTab('baby');
+    }
+  }, [isInitialized, experienceLevel, babyShellCompleted]);
 
   // Show loading state while JWT initializes
   if (!isInitialized) {
@@ -49,7 +73,12 @@ export default function Home() {
 
       {/* Status Bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-1 flex justify-between items-center flex-shrink-0">
-        <FlagTracker solvedStages={solvedStages} flagsCount={flagsCount} />
+        <FlagTracker
+          solvedStages={solvedStages}
+          flagsCount={flagsCount}
+          babyShellStep={babyShellStep}
+          babyShellCompleted={babyShellCompleted}
+        />
         <div className="flex items-center gap-3">
           <button
             onClick={(e) => {
@@ -86,9 +115,16 @@ export default function Home() {
         <TabSelector activeTab={activeTab} onTabChange={setActiveTab} />
       </div>
 
-      {/* Main Content - Both components are rendered but only one is visible */}
+      {/* Main Content - All components are rendered but only one is visible */}
       {/* This preserves state when switching tabs */}
       <div className="flex-1 overflow-hidden min-h-0 relative">
+        <div className={`absolute inset-0 ${activeTab === 'baby' ? '' : 'invisible'}`}>
+          <BabyShell
+            currentStep={babyShellStep}
+            onStepComplete={validateBabyShellStep}
+            isCompleted={babyShellCompleted}
+          />
+        </div>
         <div className={`absolute inset-0 ${activeTab === 'web' ? '' : 'invisible'}`}>
           <WebExplorer
             onFlagCandidate={validateFlag}
@@ -103,9 +139,16 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Experience Modal - shown on first visit */}
+      {experienceLevel === 'unknown' && (
+        <ExperienceModal onSelect={handleExperienceSelect} />
+      )}
+
       {/* Footer */}
       <footer className="border-t border-gray-800 p-1 text-center text-xs text-gray-600 flex-shrink-0">
         <span>Built for educational purposes | </span>
+        <span className="text-terminal-purple">Stage 0: Baby Shell</span>
+        <span> | </span>
         <span className="text-terminal-cyan">Stage 1: Shell Breakout</span>
         <span> | </span>
         <span className="text-terminal-yellow">Stage 2: Command Injection</span>
