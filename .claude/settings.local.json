@@ -15,7 +15,5 @@
       "Bash(grep:*)"
     ]
   },
-  "enabledPlugins": {
-    "greptile@claude-plugins-official": true
-  }
+  "enabledPlugins": {}
 }
