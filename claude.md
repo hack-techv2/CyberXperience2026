@@ -45,6 +45,7 @@ Tests replicate core logic from source files (no imports) and validate challenge
 - **Stage 1**: `normalizePath`, `buildDisplayPath`, cd/ls simulation, exploit path traversal to `/data/secrets`
 - **Stage 2**: `get_base_command`, whitelist enforcement, injection vectors (pipe, semicolon, `&&`, `||`, backticks, `$()`, redirects), exploit verification
 - **Stage 3**: sudoers config, `setup_flags.sh` permissions, Dockerfile packages/user setup, GTFOBin exploit validation
+- **Stage 4**: `verifyVictoryJWT`, button visibility gate, JWT cookie verification, programmatic protection
 
 Verification of CTF challenge mechanics is otherwise manual via the browser.
 
@@ -73,6 +74,7 @@ Browser → Frontend (Next.js :3000)
 | `services/web-traversal/app.py` | Stage 1 Flask API |
 | `services/shell-backend/restricted_shell.py` | Stages 2 & 3 restricted shell |
 | `flags.json` | Single source of truth for all flag values (mounted read-only into containers) |
+| `frontend/components/VictoryOverlay.tsx` | Victory celebration overlay + JWT verification for all-stages-cleared state |
 | `docker-compose.yml` | Service orchestration, networking, volume mounts |
 
 ## Important Patterns
@@ -100,7 +102,7 @@ The simulated shell treats **all** paths as relative to the current directory. T
 - **`/data` stays empty**: `/data`'s `VIRTUAL_FILES` array is `[]` — `secrets` is NOT listed, keeping the directory undiscoverable.
 - **The intended exploit** is `cat ../../data/secrets/credentials.txt` (sent raw to the API, bypassing the virtual filesystem).
 
-Run `node frontend/tests/path-resolution.test.mjs` to verify these invariants.
+Run `node tests/stage1.test.mjs` to verify these invariants.
 
 ## Workflow Orchestration
 
