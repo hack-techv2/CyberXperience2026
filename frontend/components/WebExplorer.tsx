@@ -21,6 +21,7 @@ const VIRTUAL_FILES: Record<string, string[]> = {
   '/mnt': ['shell'],
   '/mnt/shell': ['readme.txt', 'contact.txt', 'terms.txt'],
   '/data': [], // Empty - appears to exist but is "empty"
+  '/data/secrets': ['credentials.txt'], // Discoverable only via relative traversal
 };
 
 // Helper function to normalize a path (resolve . and .. segments)
@@ -101,7 +102,7 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
 
   // Check for flags in content - sends candidates to server for validation
   const checkForFlags = useCallback((content: string) => {
-    const flagMatch = content.match(/FLAG\{[^}]+\}/g);
+    const flagMatch = content.match(/ASG\{[^}]+\}/g);
     if (flagMatch) {
       flagMatch.forEach(flag => onFlagCandidate(flag));
     }
@@ -189,11 +190,6 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
         const displayPath = buildDisplayPath(currentPath, targetArg);
         const resolvedPath = normalizePath(displayPath);
 
-        // Block traversal to /data/secrets specifically
-        if (resolvedPath.startsWith('/data/secrets')) {
-          return { output: `ls: cannot access '${targetArg}': Permission denied`, isError: true };
-        }
-
         // List from API for /mnt/shell (the user's home with actual files)
         if (resolvedPath === '/mnt/shell') {
           const result = await listFiles();
@@ -223,11 +219,6 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
         const displayPath = buildDisplayPath(currentPath, targetPath);
         const resolvedPath = normalizePath(displayPath);
 
-        // Block traversal to /data/secrets specifically (they need to use cat for the exploit)
-        if (resolvedPath.startsWith('/data/secrets')) {
-          return { output: `cd: ${targetPath}: Permission denied`, isError: true };
-        }
-
         // Check if the resolved path exists in our virtual filesystem
         if (VIRTUAL_FILES[resolvedPath] !== undefined) {
           // Store the display path (with ..) not the resolved path
@@ -235,7 +226,7 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
           return { output: '' };
         }
 
-        return { output: `cd: ${targetPath}: No such file or directory`, isError: true };
+        return { output: `cd: ${displayPath}: No such file or directory`, isError: true };
       }
 
       case 'cat': {
@@ -245,9 +236,13 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
 
         const filename = args.join(' ');
 
-        // This is where the vulnerability lies - we pass the filename directly to the API
-        // The API doesn't sanitize paths, allowing directory traversal
-        const result = await fetchFile(filename);
+        // All paths are relative to the current directory (/mnt/shell).
+        // Strip leading '/' so absolute paths like /data/secrets/credentials.txt
+        // become relative (data/secrets/credentials.txt) and resolve inside WEB_ROOT
+        // on the backend. The exploit requires a relative traversal path like
+        // ../../data/secrets/credentials.txt to escape WEB_ROOT via os.path.join.
+        const relativeName = filename.startsWith('/') ? filename.slice(1) : filename;
+        const result = await fetchFile(relativeName);
         return result;
       }
 

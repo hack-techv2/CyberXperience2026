@@ -2,11 +2,11 @@
 # Create the secret credentials file using flags.json as single source of truth
 
 # Read flag from flags.json (mounted at /app/flags.json)
-FLAG_VALUE=$(cat /app/flags.json 2>/dev/null | grep -o '"value": "FLAG{[^"]*"' | head -1 | sed 's/"value": "//' | tr -d '"')
+FLAG_VALUE=$(cat /app/flags.json 2>/dev/null | grep -o '"value": "ASG{[^"]*"' | head -1 | sed 's/"value": "//' | tr -d '"')
 
 # Fallback if flags.json isn't available
 if [ -z "$FLAG_VALUE" ]; then
-    FLAG_VALUE="FLAG{missing_flag}"
+    FLAG_VALUE="ASG{missing_flag}"
 fi
 
 cat > /data/secrets/credentials.txt << EOF

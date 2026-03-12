@@ -12,7 +12,9 @@
       "Bash(docker logs:*)",
       "Bash(curl:*)",
       "Bash(npm install:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(python tests/test_ascii_art.py 2>&1)",
+      "Bash(cd /c/users/glend/Downloads/CyberXperience2026 && python tests/test_ascii_art.py 2>&1)"
     ]
   },
   "enabledPlugins": {}

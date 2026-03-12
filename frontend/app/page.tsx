@@ -8,6 +8,7 @@ import ShellTerminal from '@/components/ShellTerminal';
 import BabyShell from '@/components/BabyShell';
 import ExperienceModal from '@/components/ExperienceModal';
 import FlagTracker from '@/components/FlagTracker';
+import VictoryOverlay from '@/components/VictoryOverlay';
 import { useFlagJWT } from '@/hooks/useFlagJWT';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -73,12 +74,15 @@ export default function Home() {
 
       {/* Status Bar */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-1 flex justify-between items-center flex-shrink-0">
-        <FlagTracker
-          solvedStages={solvedStages}
-          flagsCount={flagsCount}
-          babyShellStep={babyShellStep}
-          babyShellCompleted={babyShellCompleted}
-        />
+        <div className="flex items-center">
+          <FlagTracker
+            solvedStages={solvedStages}
+            flagsCount={flagsCount}
+            babyShellStep={babyShellStep}
+            babyShellCompleted={babyShellCompleted}
+          />
+          {flagsCount === 3 && <VictoryOverlay />}
+        </div>
         <div className="flex items-center gap-3">
           <button
             onClick={(e) => {

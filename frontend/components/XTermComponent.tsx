@@ -66,7 +66,7 @@ const LIGHT_THEME = {
   brightWhite: '#8c959f',
 };
 
-const FLAG_REGEX = /FLAG\{[^}]+\}/g;
+const FLAG_REGEX = /ASG\{[^}]+\}/g;
 
 export default function XTermComponent({ socket, onFlagCandidate, initialOutput }: XTermComponentProps) {
   const terminalRef = useRef<HTMLDivElement>(null);

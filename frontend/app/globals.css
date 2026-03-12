@@ -168,3 +168,22 @@ input[type="password"]:focus {
 .animate-bounce-thrice {
   animation: bounce-thrice 1.5s ease-in-out;
 }
+
+/* Victory celebration animations */
+@keyframes victory-pulse-border {
+  0%, 100% { border-color: rgba(63, 185, 80, 0.4); }
+  50% { border-color: rgba(63, 185, 80, 0.9); box-shadow: 0 0 8px rgba(63, 185, 80, 0.3); }
+}
+
+.victory-pulse-border {
+  animation: victory-pulse-border 2s ease-in-out infinite;
+}
+
+@keyframes victory-fade-in {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.victory-fade-in {
+  animation: victory-fade-in 0.5s ease-out;
+}

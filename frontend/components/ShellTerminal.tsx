@@ -113,10 +113,6 @@ export default function ShellTerminal({ onFlagCandidate, foundCreds }: ShellTerm
             Once you have discovered the credentials, you will be able to access the restricted shell.
             Find ways to escape the shell restrictions and escalate your privileges.
           </p>
-          <div className="text-xs text-gray-600 space-y-1">
-            <p><strong>Stage 2 Hint:</strong> The shell filters commands but what about shell operators?</p>
-            <p><strong>Stage 3 Hint:</strong> Check what you can run with <code className="text-terminal-yellow">sudo -l</code></p>
-          </div>
         </div>
 
         {/* Locked State */}
