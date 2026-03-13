@@ -52,16 +52,18 @@ function Remove-BrowserData {
 Write-Host "`n=== CyberXperience 2026 - Browser Cleanup ===" -ForegroundColor Cyan
 Write-Host "Clearing cookies, cache, and history...`n"
 
-# --- Google Chrome ---
+# --- Google Chrome (Default profile, guest mode) ---
 $chromeBase = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default"
 Remove-BrowserData "Chrome Cookies" @(
     "$chromeBase\Cookies",
-    "$chromeBase\Cookies-journal"
+    "$chromeBase\Cookies-journal",
+    "$chromeBase\Network\Cookies",
+    "$chromeBase\Network\Cookies-journal"
 )
 Remove-BrowserData "Chrome Cache" @(
     "$chromeBase\Cache\Cache_Data",
-    "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Code Cache",
-    "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Service Worker\CacheStorage"
+    "$chromeBase\Code Cache",
+    "$chromeBase\Service Worker\CacheStorage"
 )
 Remove-BrowserData "Chrome History" @(
     "$chromeBase\History",
@@ -76,11 +78,13 @@ Remove-BrowserData "Chrome Session" @(
     "$chromeBase\Local Storage"
 )
 
-# --- Microsoft Edge ---
+# --- Microsoft Edge (Default profile, guest mode) ---
 $edgeBase = "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default"
 Remove-BrowserData "Edge Cookies" @(
     "$edgeBase\Cookies",
-    "$edgeBase\Cookies-journal"
+    "$edgeBase\Cookies-journal",
+    "$edgeBase\Network\Cookies",
+    "$edgeBase\Network\Cookies-journal"
 )
 Remove-BrowserData "Edge Cache" @(
     "$edgeBase\Cache\Cache_Data",
