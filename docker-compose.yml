@@ -7,7 +7,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "80:3000"
     environment:
       - NEXT_PUBLIC_GATEWAY_URL=http://localhost:4000
     depends_on:
@@ -25,7 +25,7 @@ services:
       - "4000:4000"
     environment:
       - PORT=4000
-      - FRONTEND_URL=http://localhost:3000
+      - FRONTEND_URL=http://localhost
       - FLAGS_PATH=/app/flags.json
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
