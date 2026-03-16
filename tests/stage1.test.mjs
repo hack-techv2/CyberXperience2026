@@ -251,42 +251,51 @@ test('VIRTUAL_FILES[/data] is empty array', () => {
   assert.deepStrictEqual(VIRTUAL_FILES['/data'], []);
 });
 
-test('cat passes raw filename to API (no path resolution)', () => {
-  // cat ../../data/secrets/credentials.txt should NOT be resolved
-  // It should be sent as-is to the API endpoint
-  const catTarget = '../../data/secrets/credentials.txt';
-  // Verify that resolvePath would change this (proving cat must bypass it)
-  const resolved = resolvePath('/mnt/shell', catTarget);
-  assert.strictEqual(resolved, '/data/secrets/credentials.txt');
-  // The raw target differs from the resolved path - cat sends raw
-  assert.notStrictEqual(catTarget, resolved);
-});
+// --- cat path resolution (uses buildDisplayPath + strips /mnt/shell/ prefix) ---
 
-// --- cat strips leading slash (all paths relative to /mnt/shell) ---
-
-function stripLeadingSlash(path) {
-  return path.startsWith('/') ? path.slice(1) : path;
+function simulateCatPath(currentPath, filename) {
+  const displayPath = buildDisplayPath(currentPath, filename);
+  const webRoot = '/mnt/shell/';
+  if (displayPath.startsWith(webRoot)) {
+    return displayPath.slice(webRoot.length);
+  }
+  return displayPath.startsWith('/') ? displayPath.slice(1) : displayPath;
 }
 
-test('cat strips leading / from absolute path', () => {
-  assert.strictEqual(stripLeadingSlash('/data/secrets/credentials.txt'), 'data/secrets/credentials.txt');
+test('cat credentials.txt after step-by-step cd to /data/secrets', () => {
+  // Simulate: cd .. -> cd .. -> cd data -> cd secrets -> cat credentials.txt
+  let path = '/mnt/shell';
+  path = simulateCd(path, '..').newPath;
+  path = simulateCd(path, '..').newPath;
+  path = simulateCd(path, 'data').newPath;
+  path = simulateCd(path, 'secrets').newPath;
+  const apiPath = simulateCatPath(path, 'credentials.txt');
+  // Should contain traversal so backend resolves outside WEB_ROOT
+  assert.ok(apiPath.includes('../../data/secrets/credentials.txt'),
+    `Expected traversal path, got: ${apiPath}`);
 });
 
-test('cat preserves relative path (no leading /)', () => {
-  assert.strictEqual(stripLeadingSlash('../../data/secrets/credentials.txt'), '../../data/secrets/credentials.txt');
+test('cat credentials.txt from /mnt/shell sends bare filename', () => {
+  const apiPath = simulateCatPath('/mnt/shell', 'credentials.txt');
+  assert.strictEqual(apiPath, 'credentials.txt');
 });
 
-test('absolute path after stripping / no longer bypasses WEB_ROOT', () => {
-  // /data/secrets/credentials.txt → data/secrets/credentials.txt
-  // On backend: os.path.join("/app/public", "data/secrets/credentials.txt")
-  //           → /app/public/data/secrets/credentials.txt (file doesn't exist)
-  const stripped = stripLeadingSlash('/data/secrets/credentials.txt');
-  assert.ok(!stripped.startsWith('/'), 'Path must be relative after stripping');
+test('cat readme.txt from /mnt/shell sends bare filename', () => {
+  const apiPath = simulateCatPath('/mnt/shell', 'readme.txt');
+  assert.strictEqual(apiPath, 'readme.txt');
 });
 
-test('relative traversal path is unchanged by strip', () => {
-  const exploit = '../../data/secrets/credentials.txt';
-  assert.strictEqual(stripLeadingSlash(exploit), exploit);
+test('cat /data/secrets/credentials.txt treated as relative (no bypass)', () => {
+  // Absolute path becomes relative under /mnt/shell → data/secrets/credentials.txt
+  // Backend: os.path.join("/app/public", "data/secrets/credentials.txt") → not found
+  const apiPath = simulateCatPath('/mnt/shell', '/data/secrets/credentials.txt');
+  assert.strictEqual(apiPath, 'data/secrets/credentials.txt');
+  assert.ok(!apiPath.startsWith('/'), 'Path must be relative');
+});
+
+test('cat ../../data/secrets/credentials.txt exploit still works from /mnt/shell', () => {
+  const apiPath = simulateCatPath('/mnt/shell', '../../data/secrets/credentials.txt');
+  assert.strictEqual(apiPath, '../../data/secrets/credentials.txt');
 });
 
 // ========== Summary ==========

@@ -236,12 +236,16 @@ export default function WebExplorer({ onFlagCandidate, onCredentialsFound }: Web
 
         const filename = args.join(' ');
 
-        // All paths are relative to the current directory (/mnt/shell).
-        // Strip leading '/' so absolute paths like /data/secrets/credentials.txt
-        // become relative (data/secrets/credentials.txt) and resolve inside WEB_ROOT
-        // on the backend. The exploit requires a relative traversal path like
-        // ../../data/secrets/credentials.txt to escape WEB_ROOT via os.path.join.
-        const relativeName = filename.startsWith('/') ? filename.slice(1) : filename;
+        // Build the full path relative to currentPath, just like ls does
+        const displayPath = buildDisplayPath(currentPath, filename);
+
+        // Strip the /mnt/shell prefix to get the path relative to WEB_ROOT
+        // e.g., /mnt/shell/../../data/secrets/credentials.txt → ../../data/secrets/credentials.txt
+        const webRoot = '/mnt/shell/';
+        const relativeName = displayPath.startsWith(webRoot)
+          ? displayPath.slice(webRoot.length)
+          : displayPath.startsWith('/') ? displayPath.slice(1) : displayPath;
+
         const result = await fetchFile(relativeName);
         return result;
       }

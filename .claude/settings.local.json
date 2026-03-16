@@ -14,7 +14,9 @@
       "Bash(npm install:*)",
       "Bash(grep:*)",
       "Bash(python tests/test_ascii_art.py 2>&1)",
-      "Bash(cd /c/users/glend/Downloads/CyberXperience2026 && python tests/test_ascii_art.py 2>&1)"
+      "Bash(cd /c/users/glend/Downloads/CyberXperience2026 && python tests/test_ascii_art.py 2>&1)",
+      "Bash(node tests/stage1.test.mjs)",
+      "Bash(bash tests/run-all.sh)"
     ]
   },
   "enabledPlugins": {}
